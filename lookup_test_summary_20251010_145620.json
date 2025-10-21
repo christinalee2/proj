@@ -1,0 +1,12 @@
+{
+  "test_date": "2025-10-10T14:56:20.469354",
+  "total_tested": 300,
+  "avg_confidence": 0.8840000000000001,
+  "median_confidence": 0.9,
+  "avg_lookup_time": 3.981933333333333,
+  "type1_accuracy": 0.9429530201342282,
+  "type2_accuracy": 0.8614864864864865,
+  "type3_accuracy": 0.24242424242424243,
+  "country_parent_accuracy": 0.826530612244898,
+  "country_sub_accuracy": 0.8809523809523809
+}
