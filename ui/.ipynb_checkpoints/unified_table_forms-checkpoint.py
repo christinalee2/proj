@@ -1282,7 +1282,7 @@ def run_batch_lookup(results: List[ValidationResult], table_name: str, session_k
         st.info("No incomplete records found.")
         return
     
-    batch_size = 5
+    batch_size = 1
     total_results = len(missing_data_results)
     
     try:
@@ -1315,7 +1315,8 @@ def run_batch_lookup(results: List[ValidationResult], table_name: str, session_k
             
             for idx, result in enumerate(current_batch):
                 global_idx = batch_start + idx
-                institution_name = result.data.get('institution_cpi')
+                # institution_name = result.data.get('institution_cpi')
+                institution_name = str(result.data.get('institution_cpi', '')).strip()
                 status_text.text(f"Looking up {global_idx + 1}/{total_results}: {institution_name}")
                 
                 try:
