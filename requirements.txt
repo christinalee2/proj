@@ -50,6 +50,7 @@ rfc3986-validator
 rioxarray
 scikit-image
 scipy
+sklearn
 six
 snuggs
 tenacity
