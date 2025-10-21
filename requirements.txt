@@ -87,3 +87,4 @@ python-dotenv
 boto3
 pyathena
 unidecode
+s3fs
