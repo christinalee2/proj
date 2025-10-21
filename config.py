@@ -2,12 +2,38 @@ import os
 from typing import Dict, List
 from datetime import datetime
 
-AWS_REGION = os.getenv('AWS_REGION', 'us-east-1')
-S3_BUCKET = os.getenv('S3_BUCKET', 'cpi-uk-us-datascience-stage')
-ATHENA_DATABASE = os.getenv('ATHENA_DATABASE', 'ref_testing')
-ATHENA_OUTPUT_LOCATION = os.getenv('ATHENA_OUTPUT_LOCATION', f's3://{S3_BUCKET}/auxiliary-data/reference-data/reference-db/athena-query-results/')
 
-OPENAI_API_KEY = os.getenv('OPENAI_API_KEY', '')
+def get_env_var(key: str, default: str = '') -> str:
+    """
+    Get environment variable from .env file (local) or Streamlit secrets (cloud)
+    
+    Args:
+        key: Environment variable name
+        default: Default value if not found
+        
+    Returns:
+        Environment variable value
+    """
+    # First try environment variables (from .env locally)
+    value = os.getenv(key)
+    if value:
+        return value
+    
+    # Then try Streamlit secrets (for cloud deployment)
+    try:
+        return st.secrets[key]
+    except (KeyError, AttributeError):
+        return default
+
+AWS_REGION = get_env_var('AWS_REGION', 'us-east-1')
+S3_BUCKET = get_env_var('S3_BUCKET', 'cpi-uk-us-datascience-stage')
+ATHENA_DATABASE = get_env_var('ATHENA_DATABASE', 'ref_testing')
+ATHENA_OUTPUT_LOCATION = get_env_var('ATHENA_OUTPUT_LOCATION', f's3://{S3_BUCKET}/auxiliary-data/reference-data/reference-db/athena-query-results/')
+
+OPENAI_API_KEY = get_env_var('OPENAI_API_KEY', '')
+
+AWS_ACCESS_KEY_ID = get_env_var('AWS_ACCESS_KEY_ID', '')
+AWS_SECRET_ACCESS_KEY = get_env_var('AWS_SECRET_ACCESS_KEY', '')
 
 CURRENT_YEAR = datetime.now().year
 FUZZY_MATCH_THRESHOLD = 85
