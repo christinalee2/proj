@@ -1,7 +1,3 @@
-"""
-Updated SQL query functions for generic database operations
-Extended to work with any table while maintaining backward compatibility
-"""
 import pandas as pd
 from typing import List, Optional, Dict, Any
 from database.connection import DatabaseConnection

@@ -1,6 +1,3 @@
-"""
-Data enrichment service for suggesting institution metadata
-"""
 from typing import Dict, Optional, List
 import json
 from openai import OpenAI

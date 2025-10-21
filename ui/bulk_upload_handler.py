@@ -1,7 +1,3 @@
-"""
-Bulk upload handler with Excel-style grid interface - Optimized for speed
-Uses cached queries and services for maximum performance
-"""
 import pandas as pd
 import streamlit as st
 from typing import Dict, List, Tuple, Optional

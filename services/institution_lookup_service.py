@@ -1,7 +1,3 @@
-"""
-Automated institution lookup service using web search + LLM extraction
-Enhanced with comprehensive suffix-based public/private detection and geography matching
-"""
 from typing import Dict, List, Optional, Tuple
 import json
 import requests

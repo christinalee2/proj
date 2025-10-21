@@ -1,6 +1,3 @@
-"""
-Simple institution entry form - FORM ALWAYS VISIBLE
-"""
 import streamlit as st
 from typing import List, Optional, Tuple
 from services.institution_service import InstitutionService

@@ -1,6 +1,3 @@
-"""
-Setup script to initialize the application and create necessary tables
-"""
 import os
 from database.connection import DatabaseConnection
 from database.queries import QueryService

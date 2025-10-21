@@ -1,9 +1,7 @@
-"""
-Text processing and normalization utilities
-"""
 import re
 import unicodedata
 from typing import Optional
+import pandas as pd
 
 
 class TextProcessor:
@@ -12,25 +10,21 @@ class TextProcessor:
     @staticmethod
     def normalize_institution_name(name: str) -> str:
         """
-        Normalize institution name by removing accents, standardizing whitespace,
-        and converting to a consistent format
+        Normalize institution name by removing accents, standardizing whitespace, and converting to a consistent format
         
         Args:
             name: Original institution name
             
-        Returns:
+        Output:
             Normalized institution name
         """
         if not name:
             return ""
         
-        # Remove leading/trailing whitespace
         name = name.strip()
         
-        # Remove accents and diacritics
         name = TextProcessor.remove_accents(name)
-        
-        # Standardize whitespace (multiple spaces to single space)
+
         name = re.sub(r'\s+', ' ', name)
         
         # Remove special characters that might cause issues
@@ -47,8 +41,8 @@ class TextProcessor:
         Args:
             text: Input text
             
-        Returns:
-            Text without accents
+        Output:
+            Text without accents 
         """
         if not text:
             return ""
@@ -68,7 +62,7 @@ class TextProcessor:
     @staticmethod
     def extract_suffix(institution_name: str) -> Optional[str]:
         """
-        Extract common business suffix from institution name
+        Extract common business suffix from institution name to try to match without
         
         Args:
             institution_name: Full institution name
@@ -76,7 +70,6 @@ class TextProcessor:
         Returns:
             Extracted suffix in lowercase, or None if no common suffix found
         """
-        # Common business suffixes
         suffixes = [
             'llc', 'ltd', 'limited', 'inc', 'incorporated', 'corp', 'corporation',
             'gmbh', 'sarl', 'srl', 'pvt', 'pty', 'pte', 'bv', 'nv', 'ag', 'sa',
@@ -103,7 +96,7 @@ class TextProcessor:
         Args:
             institution_name: Full institution name
             
-        Returns:
+        Output:
             List of keywords
         """
         # Remove common business suffixes and articles
@@ -130,7 +123,7 @@ class TextProcessor:
             institution_name: Full institution name
             max_length: Maximum length for short name
             
-        Returns:
+        Output:
             Shortened institution name
         """
         if len(institution_name) <= max_length:
@@ -164,7 +157,7 @@ class TextProcessor:
         Args:
             value: Raw CSV value
             
-        Returns:
+        Output:
             Cleaned value
         """
         if pd.isna(value) or value is None:
@@ -181,6 +174,3 @@ class TextProcessor:
         
         return value
 
-
-# Import pandas for CSV processing
-import pandas as pd

@@ -1,7 +1,3 @@
-"""
-Updated unified form system with "Keep" functionality for standardization
-Integrates the new StandardizationService for both single and bulk entry
-"""
 import streamlit as st
 import pandas as pd
 import io
@@ -55,7 +51,6 @@ def check_fuzzy_matches(input_value: str, existing_df: pd.DataFrame, primary_fie
         return []
     
     try:
-        # Create a temporary DataFrame with the structure fuzzy matcher expects
         temp_df = existing_df.copy()
         temp_df['institution_cpi'] = temp_df[primary_field]  # Fuzzy matcher expects this column name
         
@@ -79,34 +74,30 @@ def get_table_dropdown_options(table_name: str, config: TableConfig) -> Dict[str
     options = {}
     
     try:
-        # Get existing data from the current table only
         existing_data = get_table_data_cached(table_name, limit=None)
         
         if existing_data.empty:
-            # If no data, return empty options for all select fields
             for field_config in config.fields:
                 if field_config.field_type == 'select':
                     options[field_config.name] = ['']
             return options
         
-        # For each select field, get unique values from the table
+        # Getting values for select optinos
         for field_config in config.fields:
             if field_config.field_type == 'select':
                 field_name = field_config.name
                 
-                # Special handling for country fields - only try geography if needed and available
+                # Mostly for country fields try to load from current table so geography table doesn't have to be loaded
                 if field_name in ['country_sub', 'country_parent', 'country_cpi']:
-                    # First try to get unique values from the current table itself
                     if field_name in existing_data.columns:
                         unique_values = existing_data[field_name].dropna().unique()
                         unique_strings = sorted([str(v) for v in unique_values if str(v).strip()])
-                        if unique_strings:  # If we found countries in the current table, use those
+                        if unique_strings: 
                             options[field_name] = [''] + unique_strings
                             continue
                     
-                    # Only try geography table if current table has no country data
-                    # and we specifically need geography data
-                    if table_name != 'geography':  # Don't try to load geography when we're already in geography
+                    # Only try geography table if current table has no country data and we specifically need geography data
+                    if table_name != 'geography': 
                         try:
                             geo_data = get_table_data_cached('geography', limit=None)
                             if not geo_data.empty and 'country_cpi' in geo_data.columns:
@@ -121,7 +112,6 @@ def get_table_dropdown_options(table_name: str, config: TableConfig) -> Dict[str
                     else:
                         options[field_name] = ['']
                 
-                # For all other select fields, get unique values from the current table
                 elif field_name in existing_data.columns:
                     unique_values = existing_data[field_name].dropna().unique()
                     # Convert to strings and sort
@@ -160,12 +150,10 @@ def create_table_entry(table_name: str, data: Dict[str, Any], user: str = "syste
             user=user
         )
     else:
-        # For other tables, use direct database insertion
+        # For other tables, use direct database insertion, could probably make institution here too, I just set it up on institution service initially
         try:
-            # Clean data - remove empty values
             clean_data = {k: v for k, v in data.items() if v is not None and str(v).strip() != ''}
             
-            # Use QueryService to insert
             query_service = QueryService()
             success = query_service.execute_insert(table_name, clean_data)
             
@@ -191,7 +179,6 @@ def render_form_field(field_config, dropdown_options: Dict[str, List[str]], key_
     """Render a single form field"""
     field_key = f"{field_config.name}_{key_suffix}"
     
-    # Handle prefill for institution fields
     default_value = ''
     if field_config.name == 'institution_type_layer1' and st.session_state.get('prefill_type1'):
         default_value = st.session_state['prefill_type1']
@@ -423,18 +410,15 @@ def render_unified_single_entry_form(table_name: str):
             if lookup_result.subsidiary_country:
                 st.write(f"**Subsidiary Country:** {lookup_result.subsidiary_country}")
         
-        # Show reasoning
         if lookup_result.reasoning:
             with st.expander("Why these values?"):
                 st.write(lookup_result.reasoning)
         
-        # Show sources
         if lookup_result.sources:
             with st.expander(f"Sources ({len(lookup_result.sources)} sources used)"):
                 for source in lookup_result.sources:
                     st.markdown(f"• [{source['title']}]({source['url']})")
         
-        # Button to use these values
         col1, col2, col3 = st.columns([2, 1, 2])
         with col2:
             if st.button("Use These Values", key="use_lookup", type="primary"):
@@ -447,22 +431,18 @@ def render_unified_single_entry_form(table_name: str):
                 st.session_state['lookup_used'] = True
                 st.rerun()
     
-    # Form always shows below
     st.markdown("---")
     st.subheader(f"{config.display_name} Details")
     
-    # Collect form data
     form_data = {}
     if primary_field_config:
         form_data[primary_field] = primary_value
     
-    # Organize fields into categories
     remaining_fields = [f for f in config.fields if f.name != primary_field]
     required_fields = [f for f in remaining_fields if f.required and getattr(f, 'category', 'main') == 'main']
     optional_main_fields = [f for f in remaining_fields if not f.required and getattr(f, 'category', 'main') == 'main']
     advanced_fields = [f for f in remaining_fields if getattr(f, 'category', 'main') == 'advanced']
     
-    # Required fields
     if required_fields:
         st.subheader("Required Fields")
         cols = st.columns(2)
@@ -470,7 +450,6 @@ def render_unified_single_entry_form(table_name: str):
             with cols[i % 2]:
                 form_data[field_config.name] = render_form_field(field_config, dropdown_options, f"{table_name}_req_{i}")
     
-    # Optional main fields
     if optional_main_fields:
         st.subheader("Optional Fields")
         cols = st.columns(2)
@@ -478,7 +457,6 @@ def render_unified_single_entry_form(table_name: str):
             with cols[i % 2]:
                 form_data[field_config.name] = render_form_field(field_config, dropdown_options, f"{table_name}_opt_{i}")
     
-    # Advanced fields in expandable section
     if advanced_fields:
         with st.expander("Additional Information"):
             cols = st.columns(2)
@@ -488,7 +466,6 @@ def render_unified_single_entry_form(table_name: str):
     
     st.markdown("---")
     
-    # Submit buttons
     col1, col2, col3 = st.columns([2, 1, 1])
     
     with col1:
@@ -580,7 +557,6 @@ def render_unified_bulk_upload(table_name: str):
 
 def render_enhanced_bulk_upload_grid(validation_results: List[ValidationResult], config: TableConfig, session_key: str, table_name: str):
     """Enhanced bulk upload grid with inline fuzzy matching"""
-    # Separate results by status
     valid_results = [r for r in validation_results if r.status == 'valid']
     fuzzy_results = [r for r in validation_results if r.status == 'fuzzy_match']
     duplicate_results = [r for r in validation_results if r.status == 'duplicate']
@@ -589,7 +565,6 @@ def render_enhanced_bulk_upload_grid(validation_results: List[ValidationResult],
     visible_count = len([r for r in (valid_results + fuzzy_results) 
                         if st.session_state[f'{session_key}_user_decisions'].get(r.row_index) != 'skip'])
     
-    # Summary metrics
     pending_mappings = len(st.session_state.get(f'{session_key}_pending_mappings', {}))
 
     col1, col2, col3, col4, col5, col6 = st.columns(6)
@@ -609,7 +584,6 @@ def render_enhanced_bulk_upload_grid(validation_results: List[ValidationResult],
     
     st.markdown("---")
     
-    # Collapsed sections for duplicates and errors
     if duplicate_results:
         with st.expander(f"Duplicates ({len(duplicate_results)}) - Click to review"):
             for result in duplicate_results:
@@ -630,7 +604,6 @@ def render_enhanced_bulk_upload_grid(validation_results: List[ValidationResult],
             for result in error_results:
                 st.error(f"Row {result.row_index + 1}: {result.issues[0]}")
     
-    # Main data grid with fuzzy matches at the top
     st.subheader(f"Review & Edit Records ({visible_count} rows)")
     
     # Batch actions
@@ -652,17 +625,14 @@ def render_enhanced_bulk_upload_grid(validation_results: List[ValidationResult],
     
     st.markdown("---")
     
-    # Enhanced grid header with Match column
     render_enhanced_grid_header()
     
-    # Sort results: fuzzy matches first, then valid ones
     rows_to_show_fuzzy = [r for r in fuzzy_results if st.session_state[f'{session_key}_user_decisions'].get(r.row_index) != 'skip']
     rows_to_show_valid = [r for r in valid_results if st.session_state[f'{session_key}_user_decisions'].get(r.row_index) != 'skip']
     
     # Combine: fuzzy matches at top, then valid
     all_to_display = rows_to_show_fuzzy + rows_to_show_valid
     
-    # Pagination
     total_rows = len(all_to_display)
     rows_per_page = 50
     total_pages = (total_rows // rows_per_page) + (1 if total_rows % rows_per_page > 0 else 0)
@@ -751,13 +721,11 @@ def render_enhanced_grid_row(result: ValidationResult, config: TableConfig, sess
     
     row_data = st.session_state[f'{session_key}_edited_data'][result.row_index]
     
-    # Check if this is a fuzzy match row
     is_fuzzy_match = result.status == 'fuzzy_match' and result.fuzzy_matches
     
     container = st.container()
     
     with container:
-        # Show fuzzy match warning above the row (like original)
         if is_fuzzy_match:
             col1, col2 = st.columns([4, 1])
             with col1:
@@ -770,9 +738,7 @@ def render_enhanced_grid_row(result: ValidationResult, config: TableConfig, sess
                     st.session_state[f'show_match_dropdown_{result.row_index}'] = True
                     st.rerun()
         
-        # Show dropdown if Match button was clicked
         if st.session_state.get(f'show_match_dropdown_{result.row_index}', False):
-            # Create dropdown options from fuzzy matches
             match_options = [f"{name} ({score*100:.0f}%)" for name, score in result.fuzzy_matches]
             
             selected_match = st.selectbox(
@@ -813,17 +779,14 @@ def render_enhanced_grid_row(result: ValidationResult, config: TableConfig, sess
         # Main row with original column layout
         cols = st.columns([2, 1.5, 1.5, 1.5, 1.5, 1.5, 0.5, 0.3])
         
-        # Get dropdown options for this table
         dropdown_options = get_table_dropdown_options(table_name, config)
         
-        # Check for lookup data
         lookup_result = st.session_state.get(f'{session_key}_lookup_results', {}).get(result.row_index)
         
         with cols[0]:
-            # Institution name (with visual indicator for fuzzy matches)
             name_display = row_data.get(config.required_fields[0] if config.required_fields else config.fields[0].name, '')
             if is_fuzzy_match:
-                name_display = f"🔍 {name_display}"
+                name_display = f"{name_display}"
             st.markdown(f"<div class='institution-name'>{name_display}</div>", unsafe_allow_html=True)
         
         # Rest of the columns (Type layers, Countries, etc.) - for institution table
@@ -982,7 +945,6 @@ def init_bulk_upload_session_state(session_key: str):
 def render_template_download(table_name: str, config: TableConfig):
     """Render template download section"""
     with st.expander("Download Template"):
-        # Create sample data
         template_data = {}
         for field_config in config.fields:
             if field_config.field_type == 'number':
@@ -1032,7 +994,6 @@ def process_uploaded_file(uploaded_file, config: TableConfig, session_key: str) 
                 df.columns = df.columns.str.strip()
                 df = df.where(pd.notna(df), None)
                 
-                # Validate required columns
                 missing_columns = [field for field in config.required_fields if field not in df.columns]
                 if missing_columns:
                     st.error(f"Missing required columns: {', '.join(missing_columns)}")
@@ -1309,7 +1270,6 @@ def run_batch_lookup(results: List[ValidationResult], table_name: str, session_k
         st.info("Auto-lookup is only available for institution table")
         return
     
-    # Filter for records that need lookup and are set to insert
     missing_data_results = [
         r for r in results 
         if (not st.session_state.get(f'{session_key}_edited_data', {}).get(r.row_index, {}).get('institution_type_layer1') or 
@@ -1326,7 +1286,6 @@ def run_batch_lookup(results: List[ValidationResult], table_name: str, session_k
     try:
         from services.institution_lookup_service import InstitutionLookupService
         
-        # Initialize lookup service
         existing_data = get_table_data_cached('institution', limit=None)
         valid_countries = set()
         if not existing_data.empty:
@@ -1340,7 +1299,6 @@ def run_batch_lookup(results: List[ValidationResult], table_name: str, session_k
         progress_bar = st.progress(0)
         status_text = st.empty()
         
-        # Initialize session state
         if f'{session_key}_lookup_results' not in st.session_state:
             st.session_state[f'{session_key}_lookup_results'] = {}
         if f'{session_key}_edited_data' not in st.session_state:
@@ -1357,7 +1315,6 @@ def run_batch_lookup(results: List[ValidationResult], table_name: str, session_k
                 if lookup_result.confidence_score >= 0.75:
                     edited_data = st.session_state[f'{session_key}_edited_data'].get(result.row_index, result.data.copy())
                     
-                    # Update with lookup results
                     if lookup_result.institution_type_layer1:
                         edited_data['institution_type_layer1'] = lookup_result.institution_type_layer1
                     if lookup_result.institution_type_layer2:
@@ -1400,7 +1357,6 @@ def execute_unified_bulk_insert(validation_results: List[ValidationResult], conf
     
     with st.spinner(f"Processing {len(records_to_insert)} records and {len(pending_mappings)} standardization mappings..."):
         
-        # Step 1: Process standardization mappings first
         mapping_success_count = 0
         mapping_failed_count = 0
         
@@ -1430,12 +1386,10 @@ def execute_unified_bulk_insert(validation_results: List[ValidationResult], conf
                     mapping_failed_count += 1
                     st.error(f"Error creating mapping for row {row_index}: {str(e)}")
         
-        # Step 2: Process regular record insertions IN BULK
         insert_success_count = 0
         insert_failed_count = 0
         
         if records_to_insert:
-            # Prepare all data for bulk insert
             bulk_data = []
             for result in records_to_insert:
                 try:
@@ -1444,7 +1398,6 @@ def execute_unified_bulk_insert(validation_results: List[ValidationResult], conf
                 except Exception as e:
                     insert_failed_count += 1
             
-            # Single bulk insert call
             if bulk_data:
                 try:
                     from database.connection import DatabaseConnection
@@ -1457,11 +1410,10 @@ def execute_unified_bulk_insert(validation_results: List[ValidationResult], conf
                     st.error(f"Bulk insert failed: {str(e)}")
                     insert_failed_count = len(bulk_data)
         
-        # Clear cache ONCE at the end
+        # Clear cache once at the end
         st.cache_data.clear()
         
-        # Show results
-        st.success(f"✅ Upload complete!")
+        st.success(f"Upload complete!")
         
         col1, col2 = st.columns(2)
         with col1:
@@ -1474,12 +1426,10 @@ def execute_unified_bulk_insert(validation_results: List[ValidationResult], conf
             if mapping_failed_count > 0:
                 st.error(f"{mapping_failed_count} mappings failed")
         
-        # Clear pending mappings after successful processing
         if mapping_success_count > 0:
             st.session_state[f'{session_key}_pending_mappings'] = {}
         
         if st.button("Start New Upload"):
-            # Reset session state
             for key in ['df', 'validation_results', 'edited_data', 'user_decisions', 'lookup_results', 'upload_complete', 'upload_results', 'pending_mappings']:
                 if key == 'pending_mappings':
                     st.session_state[f'{session_key}_{key}'] = {}

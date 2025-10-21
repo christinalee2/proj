@@ -1,7 +1,3 @@
-"""
-Cached database queries for optimal performance
-All queries use st.cache_data with appropriate TTL values
-"""
 import streamlit as st
 import pandas as pd
 from database.queries import QueryService

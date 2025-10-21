@@ -1,6 +1,3 @@
-"""
-Reusable UI components for the Streamlit app
-"""
 import streamlit as st
 import pandas as pd
 from typing import List, Dict, Any, Optional
@@ -14,11 +11,11 @@ def show_validation_results(validation: Dict[str, Any]):
         validation: Validation result dictionary
     """
     if validation['has_exact_duplicate']:
-        st.error("⚠️ **Duplicate Found**")
+        st.error("**Duplicate Found**")
         st.write(f"This institution already exists in the database:")
         st.json(validation['exact_match'])
     elif validation['has_fuzzy_duplicate']:
-        st.warning("⚠️ **Similar Institutions Found**")
+        st.warning("**Similar Institutions Found**")
         st.write("The following similar institutions were found:")
         for match in validation['fuzzy_matches']:
             st.write(f"- **{match['name']}** (Match: {match['score']}%)")
@@ -32,7 +29,7 @@ def show_validation_results(validation: Dict[str, Any]):
             st.error(error)
     
     if validation['is_valid'] and not validation['has_exact_duplicate']:
-        st.success("✅ Ready to insert")
+        st.success("Ready to insert")
 
 
 def show_suggestions_panel(suggestions: Dict[str, Any]):
@@ -42,7 +39,7 @@ def show_suggestions_panel(suggestions: Dict[str, Any]):
     Args:
         suggestions: Dictionary with suggested metadata
     """
-    st.subheader("💡 Suggested Metadata")
+    st.subheader("Suggested Metadata")
     
     confidence = suggestions.get('confidence', 'low')
     if confidence == 'high':
@@ -69,7 +66,7 @@ def show_suggestions_panel(suggestions: Dict[str, Any]):
             st.write(f"**HQ Country:** {suggestions['country_parent']}")
     
     if suggestions.get('sources'):
-        with st.expander("📚 Information Sources"):
+        with st.expander("Information Sources"):
             for source in suggestions['sources']:
                 st.write(f"- {source}")
 
@@ -81,7 +78,7 @@ def show_research_links(links: List[Dict[str, str]]):
     Args:
         links: List of link dictionaries with 'title' and 'url'
     """
-    st.subheader("🔍 Research Links")
+    st.subheader("Research Links")
     cols = st.columns(len(links))
     
     for idx, link in enumerate(links):
@@ -97,7 +94,7 @@ def show_bulk_upload_preview(df: pd.DataFrame, validation_df: Optional[pd.DataFr
         df: Original DataFrame
         validation_df: DataFrame with validation results
     """
-    st.subheader("📊 Upload Preview")
+    st.subheader("Upload Preview")
     
     if validation_df is not None:
         # Show summary statistics

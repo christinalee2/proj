@@ -1,7 +1,3 @@
-"""
-Institution-specific business logic service - OPTIMIZED
-Uses cached queries for better performance
-"""
 from typing import Dict, Optional, List, Any
 import uuid
 import pandas as pd

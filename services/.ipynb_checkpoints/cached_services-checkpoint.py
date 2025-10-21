@@ -1,7 +1,3 @@
-"""
-Cached service instances for optimal performance
-Uses st.cache_resource for singleton services that should persist
-"""
 import streamlit as st
 from database.queries import QueryService
 from services.institution_service import InstitutionService

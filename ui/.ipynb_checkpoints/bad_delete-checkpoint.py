@@ -1,6 +1,3 @@
-"""
-Institution data entry form UI
-"""
 import streamlit as st
 from typing import Optional
 from services.institution_service import InstitutionService

@@ -1,7 +1,3 @@
-"""
-Fixed Standardization Service for Institution and Geography Mappings
-Handles the "Keep" functionality for fuzzy matches with proper error handling
-"""
 from typing import Optional, Dict, Any
 import pandas as pd
 import traceback

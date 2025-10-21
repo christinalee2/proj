@@ -1,6 +1,3 @@
-"""
-Bulk CSV upload interface
-"""
 import streamlit as st
 import pandas as pd
 import io

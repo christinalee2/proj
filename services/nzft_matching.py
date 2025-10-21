@@ -1,7 +1,3 @@
-"""
-NZFT Institution Matching Page
-Handles bulk uploads for institution matching with exact and fuzzy matching capabilities
-"""
 import streamlit as st
 import pandas as pd
 import io

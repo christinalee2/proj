@@ -1,7 +1,3 @@
-"""
-HYBRID Database connection - Keeps original working read logic, adds awswrangler ONLY for inserts
-This eliminates row duplication while maintaining all existing functionality
-"""
 import boto3
 from pyathena import connect
 from pyathena.cursor import Cursor
@@ -14,7 +10,6 @@ import os
 import traceback
 import io
 
-# Import awswrangler only for inserts
 try:
     import awswrangler as wr
     HAS_WRANGLER = True
@@ -26,7 +21,6 @@ except ImportError:
 def get_next_id_for_table(existing_df, table_name):
     """Simple function to get the next ID for a table - ORIGINAL VERSION"""
     
-    # Find ID column
     id_column = None
     if not existing_df.empty:
         for col in existing_df.columns:
@@ -37,7 +31,6 @@ def get_next_id_for_table(existing_df, table_name):
     if not id_column:
         id_column = f'id_{table_name}'
     
-    # Get next ID
     if existing_df.empty or id_column not in existing_df.columns:
         return id_column, 1
     
@@ -54,15 +47,12 @@ def get_next_id_for_table(existing_df, table_name):
 
 
 class DatabaseConnection:
-    """Hybrid database connection - original reads, awswrangler inserts"""
-    
+
     _connection: Optional[Cursor] = None
     
-    # S3 configuration - ORIGINAL
     S3_BUCKET = os.getenv('S3_BUCKET', 'cpi-uk-us-datascience-stage')
     S3_BASE_PATH = 'auxiliary-data/reference-data/reference-db'
     
-    # Table file mappings - ORIGINAL
     TABLE_FILES = {
         'institution': f'{S3_BASE_PATH}/institution/data.parquet',
         'geography': f'{S3_BASE_PATH}/geography/data.parquet',
@@ -125,13 +115,10 @@ class DatabaseConnection:
             else:
                 cursor.execute(query)
             
-            # Get column names
             columns = [desc[0] for desc in cursor.description] if cursor.description else []
             
-            # Get data
             data = cursor.fetchall()
             
-            # Convert to DataFrame
             if data and columns:
                 df = pd.DataFrame(data, columns=columns)
             else:
@@ -186,13 +173,10 @@ class DatabaseConnection:
     def _clean_dataframe_for_insert(cls, df: pd.DataFrame) -> pd.DataFrame:
         """Clean DataFrame for insertion"""
         try:
-            # Create copy to avoid modifying original
             df_clean = df.copy()
             
-            # Replace empty strings and 'None' strings with actual None
             df_clean = df_clean.replace(['', 'None', 'null', 'NULL'], None)
             
-            # Convert numeric columns
             for col in df_clean.columns:
                 if 'year' in col.lower() or 'id_' in col:
                     df_clean[col] = pd.to_numeric(df_clean[col], errors='ignore')
@@ -203,10 +187,8 @@ class DatabaseConnection:
                         'False': False, 'false': False, '0': False, 0: False
                     })
             
-            # Ensure datetime columns for last_verified
             if 'last_verified' in df_clean.columns:
                 df_clean['last_verified'] = pd.to_datetime(df_clean['last_verified'], errors='coerce')
-                # If last_verified is null/invalid, set to current timestamp
                 df_clean['last_verified'] = df_clean['last_verified'].fillna(pd.Timestamp.now())
             
             return df_clean
@@ -231,7 +213,6 @@ class DatabaseConnection:
         try:
             print(f"=== STARTING AWSWRANGLER INSERT FOR {table} ===")
             
-            # Step 1: Get existing data to determine next ID
             existing_data = cls.get_table_data(table, limit=None)
             id_column, next_id = get_next_id_for_table(existing_data, table)
             
@@ -239,24 +220,20 @@ class DatabaseConnection:
             data_with_id[id_column] = next_id
             print(f"New record will have {id_column} = {next_id}")
             
-            # Step 2: Create DataFrame with single row
             df_to_insert = pd.DataFrame([data_with_id])
             
-            # Step 3: Clean data
             df_cleaned = cls._clean_dataframe_for_insert(df_to_insert)
             
             if df_cleaned.empty:
                 print("No valid data to insert after cleaning")
                 return False
             
-            # Step 4: Get S3 path
             s3_path = cls.TABLE_LOCATIONS.get(table)
             if not s3_path:
                 raise ValueError(f"No S3 location configured for table: {table}")
             
             print(f"Inserting to S3 location: {s3_path}")
             
-            # Step 5: Use awswrangler to append data
             wr.s3.to_parquet(
                 df=df_cleaned,
                 path=s3_path,
@@ -269,7 +246,6 @@ class DatabaseConnection:
             
             print(f"SUCCESS: Added 1 row to {table} table via awswrangler")
             
-            # Clear Streamlit cache
             try:
                 st.cache_data.clear()
             except:
@@ -291,16 +267,13 @@ class DatabaseConnection:
         try:
             print(f"=== USING ORIGINAL INSERT METHOD FOR {table} ===")
             
-            # Read existing data
             existing_df = cls._read_existing_parquet(table)
             original_count = len(existing_df)
             
-            # Get next ID
             id_column, next_id = get_next_id_for_table(existing_df, table)
             data_with_id = data.copy()
             data_with_id[id_column] = next_id
             
-            # Create new row
             if existing_df.empty:
                 new_df = pd.DataFrame([data_with_id])
             else:
@@ -310,7 +283,6 @@ class DatabaseConnection:
                 new_row_df = pd.DataFrame([new_row])
                 new_df = pd.concat([existing_df, new_row_df], ignore_index=True)
             
-            # Write back to S3 using original method
             return cls._write_parquet_file(table, new_df)
             
         except Exception as e:

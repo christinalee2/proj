@@ -1,7 +1,3 @@
-"""
-Table configurations for multi-table upload system
-Each table has its own configuration defining fields, validation, and display
-"""
 from typing import Dict, List, Optional, Any
 from dataclasses import dataclass
 import pandas as pd

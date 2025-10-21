@@ -1,6 +1,3 @@
-"""
-Validation service for data quality checks
-"""
 from typing import Dict, List, Tuple, Optional
 import pandas as pd
 from database.queries import QueryService

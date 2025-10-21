@@ -1,6 +1,3 @@
-"""
-Live institution entry form with real-time autocomplete
-"""
 import streamlit as st
 from typing import List, Optional, Tuple
 from services.institution_service import InstitutionService

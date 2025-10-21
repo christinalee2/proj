@@ -1,6 +1,3 @@
-"""
-Reusable UI components for the Streamlit app
-"""
 import streamlit as st
 import pandas as pd
 from typing import List, Dict, Any, Optional

@@ -1,6 +1,3 @@
-"""
-Audit logging service for tracking changes
-"""
 from typing import Dict, Any, Optional, List
 from datetime import datetime
 import uuid
