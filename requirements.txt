@@ -52,7 +52,7 @@ psycopg2-binary
 pycparser==2.22
 Pygments==2.17.2
 pyparsing==3.0.9
-pyproj==3.5.0
+pyproj>=3.6.0
 python-dateutil==2.8.2
 python-json-logger==2.0.7
 pytz==2023.3
