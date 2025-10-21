@@ -90,3 +90,4 @@ unidecode
 s3fs
 jaro-winkler
 openai
+openpyxl
