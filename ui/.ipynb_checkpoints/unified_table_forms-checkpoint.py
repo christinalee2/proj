@@ -11,6 +11,7 @@ from database.queries import QueryService
 from utils.text_processing import TextProcessor
 from utils.fuzzy_matching import get_fitted_matcher
 from services.standardization_service import StandardizationService
+import time
 
 
 @dataclass
@@ -1265,7 +1266,7 @@ def run_single_lookup(result: ValidationResult, table_name: str, session_key: st
 
 
 def run_batch_lookup(results: List[ValidationResult], table_name: str, session_key: str):
-    """Run auto-lookup for multiple entries"""
+    """Run auto-lookup for multiple entries in batches"""
     if table_name != 'institution':
         st.info("Auto-lookup is only available for institution table")
         return
@@ -1281,7 +1282,8 @@ def run_batch_lookup(results: List[ValidationResult], table_name: str, session_k
         st.info("No incomplete records found.")
         return
     
-    lookup_limit = min(len(missing_data_results), 20)
+    batch_size = 5
+    total_results = len(missing_data_results)
     
     try:
         from services.institution_lookup_service import InstitutionLookupService
@@ -1304,38 +1306,55 @@ def run_batch_lookup(results: List[ValidationResult], table_name: str, session_k
         if f'{session_key}_edited_data' not in st.session_state:
             st.session_state[f'{session_key}_edited_data'] = {}
         
-        for idx, result in enumerate(missing_data_results[:lookup_limit]):
-            institution_name = result.data.get('institution_cpi')
-            status_text.text(f"Looking up {idx + 1}/{lookup_limit}: {institution_name}")
+        # Process in batches
+        for batch_start in range(0, total_results, batch_size):
+            batch_end = min(batch_start + batch_size, total_results)
+            current_batch = missing_data_results[batch_start:batch_end]
             
-            try:
-                lookup_result = lookup_service.lookup_institution(institution_name)
-                st.session_state[f'{session_key}_lookup_results'][result.row_index] = lookup_result
-                
-                if lookup_result.confidence_score >= 0.75:
-                    edited_data = st.session_state[f'{session_key}_edited_data'].get(result.row_index, result.data.copy())
-                    
-                    if lookup_result.institution_type_layer1:
-                        edited_data['institution_type_layer1'] = lookup_result.institution_type_layer1
-                    if lookup_result.institution_type_layer2:
-                        edited_data['institution_type_layer2'] = lookup_result.institution_type_layer2
-                    if lookup_result.institution_type_layer3:
-                        edited_data['institution_type_layer3'] = lookup_result.institution_type_layer3
-                    if lookup_result.subsidiary_country:
-                        edited_data['country_sub'] = lookup_result.subsidiary_country
-                    if lookup_result.parent_country:
-                        edited_data['country_parent'] = lookup_result.parent_country
-                    
-                    st.session_state[f'{session_key}_edited_data'][result.row_index] = edited_data
-                
-            except Exception as e:
-                print(f"Lookup failed for {institution_name}: {str(e)}")
+            status_text.text(f"Processing batch {batch_start//batch_size + 1} of {(total_results + batch_size - 1)//batch_size}")
             
-            progress_bar.progress((idx + 1) / lookup_limit)
+            for idx, result in enumerate(current_batch):
+                global_idx = batch_start + idx
+                institution_name = result.data.get('institution_cpi')
+                status_text.text(f"Looking up {global_idx + 1}/{total_results}: {institution_name}")
+                
+                try:
+                    lookup_result = lookup_service.lookup_institution(institution_name)
+                    st.session_state[f'{session_key}_lookup_results'][result.row_index] = lookup_result
+                    
+                    if lookup_result.confidence_score >= 0.75:
+                        edited_data = st.session_state[f'{session_key}_edited_data'].get(result.row_index, result.data.copy())
+                        
+                        if lookup_result.institution_type_layer1:
+                            edited_data['institution_type_layer1'] = lookup_result.institution_type_layer1
+                        if lookup_result.institution_type_layer2:
+                            edited_data['institution_type_layer2'] = lookup_result.institution_type_layer2
+                        if lookup_result.institution_type_layer3:
+                            edited_data['institution_type_layer3'] = lookup_result.institution_type_layer3
+                        if lookup_result.subsidiary_country:
+                            edited_data['country_sub'] = lookup_result.subsidiary_country
+                        if lookup_result.parent_country:
+                            edited_data['country_parent'] = lookup_result.parent_country
+                        
+                        st.session_state[f'{session_key}_edited_data'][result.row_index] = edited_data
+                    
+                except Exception as e:
+                    print(f"Lookup failed for {institution_name}: {str(e)}")
+                
+                progress_bar.progress((global_idx + 1) / total_results)
+                
+                # Add delay between lookups for quality
+                if global_idx < total_results - 1:  # Don't delay after the last one
+                    time.sleep(1.0)  # 1 second delay
+            
+            # Longer delay between batches to ensure high quality
+            if batch_end < total_results:
+                status_text.text(f"Completed batch {batch_start//batch_size + 1}. Pausing before next batch...")
+                time.sleep(3.0)  # 3 second pause between batches
         
         progress_bar.empty()
         status_text.empty()
-        st.success(f"Completed {lookup_limit} lookups")
+        st.success(f"Completed {total_results} lookups in {(total_results + batch_size - 1)//batch_size} batches")
         st.rerun()
         
     except Exception as e:
