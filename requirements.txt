@@ -88,3 +88,4 @@ boto3
 pyathena
 unidecode
 s3fs
+jaro
