@@ -86,3 +86,4 @@ xarray
 python-dotenv
 boto3
 pyathena
+unidecode
