@@ -12,14 +12,14 @@ import pandas as pd
 class InstitutionLookupResult:
     """Structured result from institution lookup"""
     institution_name: str
-    institution_type_layer1: Optional[str]  # Public/Private
-    institution_type_layer2: Optional[str]  # Funds/Corporation/etc
-    institution_type_layer3: Optional[str]  # Asset Manager/Bank/etc
-    parent_country: Optional[str]  # HQ country
-    subsidiary_country: Optional[str]  # Operating country
-    confidence_score: float  # 0-1
-    sources: List[Dict[str, str]]  # List of source URLs with descriptions
-    reasoning: str  # Why the LLM made these choices
+    institution_type_layer1: Optional[str]  
+    institution_type_layer2: Optional[str]  
+    institution_type_layer3: Optional[str] 
+    parent_country: Optional[str]  
+    subsidiary_country: Optional[str]  
+    confidence_score: float 
+    sources: List[Dict[str, str]]  
+    reasoning: str 
     timestamp: str
 
 
@@ -32,13 +32,10 @@ class InstitutionLookupService:
     4. Institution table country matching
     """
     
-    # Public company suffixes (stock exchange listed)
-    # From international suffix reference data
     PUBLIC_SUFFIXES = {
 
     }
     
-    # Private company suffixes
     PRIVATE_SUFFIXES = {
         'Ltd', 'LTD', 'Limited', 'Ltd.',
         'LLC', 'L.L.C', 'L.L.C.',
@@ -107,7 +104,6 @@ class InstitutionLookupService:
         'GmbH & Co KGaA',  # Germany (publicly traded partnership)
     }
     
-    # Suffixes that could indicate government/public sector
     GOVERNMENT_INDICATORS = [
         'SOE', 'State Owned', 'Ministry', 'Department', 'Authority',
         'Commission', 'Agency', 'Bureau', 'Administration', 'Government',
@@ -115,7 +111,6 @@ class InstitutionLookupService:
         'State Corporation', 'Public Corporation', 'Crown Corporation'
     ]
     
-    # Trusted domains for search
     TRUSTED_DOMAINS = [
         'bloomberg.com',
         'reuters.com',
@@ -181,12 +176,10 @@ class InstitutionLookupService:
         if self.detect_government_entity(institution_name):
             return 'Public'
         
-        # Check for public suffixes (stock exchange listed)
         for suffix in self.PUBLIC_SUFFIXES:
             if self._has_suffix(institution_name, suffix):
                 return 'Public'
         
-        # Check for private suffixes
         for suffix in self.PRIVATE_SUFFIXES:
             if self._has_suffix(institution_name, suffix):
                 return 'Private'
@@ -233,19 +226,16 @@ class InstitutionLookupService:
         
         country_clean = country_name.strip()
         
-        # Exact match (case-insensitive)
         for valid_country in self.valid_countries:
             if country_clean.lower() == valid_country.lower():
                 return valid_country
         
-        # Partial match
         for valid_country in self.valid_countries:
             if country_clean.lower() in valid_country.lower():
                 return valid_country
             if valid_country.lower() in country_clean.lower():
                 return valid_country
         
-        # ISO code mappings
         iso_mappings = {
             'USA': ['United States', 'USA', 'US', 'United States of America', 'U.S.', 'U.S.A.'],
             'US': ['United States', 'USA', 'US', 'United States of America', 'U.S.', 'U.S.A.'],
@@ -294,7 +284,6 @@ class InstitutionLookupService:
         results = []
         url = "https://google.serper.dev/search"
         
-        # Try multiple search strategies
         search_queries = [
             f'"{institution_name}" company',
             f'"{institution_name}" headquarters',
@@ -338,7 +327,7 @@ class InstitutionLookupService:
                             })
                             
                     if organic_results:
-                        break  # Found results, stop searching
+                        break  
                         
                 else:
                     print(f"DEBUG: Serper API error {response.status_code}: {response.text}")
@@ -538,13 +527,10 @@ Snippet: {result['snippet']}
         Returns:
             Structured institution data
         """
-        # Step 1: Suffix-based detection
         suffix_detected = self.detect_public_private_from_suffix(institution_name)
         
-        # Step 2: Search for additional info
         search_results = self.search_trusted_sources(institution_name)
         
-        # Step 3: Extract structured data
         result = self.extract_institution_data(
             institution_name, 
             search_results,

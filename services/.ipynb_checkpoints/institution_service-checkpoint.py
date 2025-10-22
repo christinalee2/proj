@@ -40,7 +40,7 @@ class InstitutionService:
         created_at: Optional[int] = None
     ) -> Dict[str, Any]:
         """
-        Create a new institution with validation and enrichment
+        Create a new institution with validation and enrichment - important to ensure types match parquet
         
         Args:
             institution_name: Name of the institution
@@ -66,40 +66,25 @@ class InstitutionService:
             'message': ''
         }
         
-        # Get existing institutions from cache - FAST
         existing_institutions = get_all_institutions_cached()
         
-        # Validate the entry
         validation = self.validation_service.validate_institution_entry(
             institution_name,
             existing_institutions
         )
         result['validation'] = validation
         
-        # Check for exact duplicates
         if validation['has_exact_duplicate']:
             result['message'] = f"Institution already exists: {validation['exact_match']['institution_cpi']}"
             return result
         
-        # # Check for standardization mapping
-        # should_standardize, standardized_name = self.standardization_service.should_use_standardized_name(
-        #     institution_name,
-        #     existing_institutions
-        # )
-        
-        # if should_standardize:
-        #     final_name = standardized_name
-        #     result['message'] += f"Mapped to standardized name: {standardized_name}. "
-        # else:
         final_name = validation['normalized_name']
         
-        # Get suggestions if fields are missing
         suggestions = None
         if not all([institution_type_layer1, institution_type_layer2, institution_type_layer3]):
             suggestions = self.enrichment_service.suggest_institution_metadata(final_name)
             result['suggestions'] = suggestions
             
-            # Use suggestions if fields are empty
             if not institution_type_layer1 and suggestions.get('institution_type_layer1'):
                 institution_type_layer1 = suggestions['institution_type_layer1']
             if not institution_type_layer2 and suggestions.get('institution_type_layer2'):
@@ -111,11 +96,9 @@ class InstitutionService:
             if not country_parent and suggestions.get('country_parent'):
                 country_parent = suggestions['country_parent']
         
-        # Generate institution ID and short name
         institution_id = str(uuid.uuid4())
         institution_short = TextProcessor.generate_short_name(final_name)
         
-        # Prepare data for insertion
         institution_data = {
             'id_institution_cpi': institution_id,
             'institution_cpi': final_name,
@@ -133,14 +116,11 @@ class InstitutionService:
             'created_by': user
         }
         
-        # Remove None values
         institution_data = {k: v for k, v in institution_data.items() if v is not None}
         
-        # Insert into database
         success = self.query_service.insert_institution(institution_data)
         
         if success:
-            # Log the creation
             self.audit_service.log_insert('institution', institution_id, institution_data, user)
             
             result['success'] = True
@@ -176,13 +156,10 @@ class InstitutionService:
             'summary': None
         }
         
-        # Get existing institutions from cache - FAST
         existing_institutions = get_all_institutions_cached()
         
-        # Validate all entries first
         validated_df = self.validation_service.validate_bulk_entries(df, existing_institutions)
         
-        # Process each row
         for idx, row in validated_df.iterrows():
             row_result = {
                 'row_number': idx + 1,
@@ -199,7 +176,6 @@ class InstitutionService:
                 row_result['message'] = row.get('message', 'Validation error')
                 result['failed'] += 1
             else:
-                # Attempt to create institution
                 creation_result = self.create_institution(
                     institution_name=row.get('institution_cpi') or row.get('institution_name', ''),
                     institution_type_layer1=row.get('institution_type_layer1'),
@@ -228,7 +204,6 @@ class InstitutionService:
             
             result['details'].append(row_result)
         
-        # Create summary
         result['summary'] = (
             f"Processed {result['total_rows']} rows: "
             f"{result['successful']} successful, "
@@ -259,15 +234,7 @@ class InstitutionService:
         self,
         institution_name: str
     ) -> Dict[str, Any]:
-        """
-        Get enrichment suggestions for an institution
-        
-        Args:
-            institution_name: Name of the institution
-            
-        Returns:
-            Dictionary with suggestions and research links
-        """
+
         suggestions = self.enrichment_service.suggest_institution_metadata(institution_name)
         research_links = self.enrichment_service.get_research_links(institution_name)
         
