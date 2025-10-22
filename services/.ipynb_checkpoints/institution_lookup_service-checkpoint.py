@@ -140,6 +140,7 @@ class InstitutionLookupService:
         """
         self.google_api_key = os.getenv('GOOGLE_API_KEY', '')
         self.search_engine_id = os.getenv('GOOGLE_SEARCH_ENGINE_ID', '')
+        self.serper_api_key = os.getenv('SERPER_API_KEY', '')
         self.openai_api_key = os.getenv('OPENAI_API_KEY', '')
         self.openai_client = OpenAI(api_key=self.openai_api_key) if self.openai_api_key else None
         
@@ -284,131 +285,71 @@ class InstitutionLookupService:
         return country_name
     
     def search_trusted_sources(self, institution_name: str) -> List[Dict[str, str]]:
-        """Search Google for institution info using Custom Search API"""
-        # Try to get API keys from both environment and streamlit secrets
-        google_api_key = os.getenv('GOOGLE_API_KEY', '')
-        search_engine_id = os.getenv('GOOGLE_SEARCH_ENGINE_ID', '')
-        
-        # If not in env vars, try streamlit secrets
-        if not google_api_key or not search_engine_id:
-            try:
-                import streamlit as st
-                google_api_key = google_api_key or st.secrets.get('GOOGLE_API_KEY', '')
-                search_engine_id = search_engine_id or st.secrets.get('GOOGLE_SEARCH_ENGINE_ID', '')
-            except:
-                pass
-        
-        if not google_api_key or not search_engine_id:
-            print("DEBUG: Missing API credentials, using fallback")
+    """Search for institution info using Serper.dev API"""
+    
+        if not self.serper_api_key:
+            print("ERROR: Serper API key not configured")
             return self._fallback_search(institution_name)
         
         results = []
-        base_url = "https://www.googleapis.com/customsearch/v1"
+        url = "https://google.serper.dev/search"
         
         # Try multiple search strategies
         search_queries = [
-            f'"{institution_name}" company',  # Exact match with "company"
-            f'"{institution_name}" headquarters',  # Original exact query
-            f'{institution_name} company information',  # Without quotes
-            f'{institution_name} corporation',  # Try "corporation"
-            f'{institution_name} business',  # Try "business"
+            f'"{institution_name}" company',
+            f'"{institution_name}" headquarters',
+            f'{institution_name} company information',
+            f'{institution_name} corporation',
         ]
         
-        # Remove suffixes for broader search
-        broad_name = institution_name
-        for suffix in [' SA', ' S.A.', ' Inc', ' Inc.', ' Ltd', ' LLC', ' Corp', ' PLC', ' Company', ' Co']:
-            if broad_name.endswith(suffix):
-                broad_name = broad_name[:-len(suffix)].strip()
-        
-        # Add broad searches
-        if broad_name != institution_name:
-            search_queries.extend([
-                f'"{broad_name}" company',
-                f'{broad_name} business information',
-            ])
-        
         for i, query in enumerate(search_queries):
-            if len(results) >= 8:  # Stop if we have enough results
+            if len(results) >= 8:
                 break
                 
             try:
-                print(f"DEBUG: Search attempt {i+1}: {query}")
-                response = requests.get(
-                    base_url,
-                    params={
-                        'key': google_api_key,
-                        'cx': search_engine_id,
-                        'q': query,
-                        'num': 10
-                    },
-                    timeout=30
-                )
+                print(f"DEBUG: Serper search attempt {i+1}: {query}")
+                
+                payload = json.dumps({
+                    "q": query,
+                    "num": 10
+                })
+                
+                headers = {
+                    'X-API-KEY': self.serper_api_key,
+                    'Content-Type': 'application/json'
+                }
+                
+                response = requests.post(url, headers=headers, data=payload, timeout=30)
                 
                 if response.status_code == 200:
                     data = response.json()
-                    new_results = len(data.get('items', []))
-                    print(f"DEBUG: Query '{query}' returned {new_results} results")
+                    organic_results = data.get('organic', [])
+                    print(f"DEBUG: Query '{query}' returned {len(organic_results)} results")
                     
                     existing_links = {r['link'] for r in results}
-                    for item in data.get('items', []):
+                    for item in organic_results:
                         link = item.get('link', '')
                         if link not in existing_links:
                             results.append({
                                 'title': item.get('title', ''),
                                 'link': link,
                                 'snippet': item.get('snippet', ''),
-                                'match_type': 'exact' if i < 2 else 'broad'
+                                'match_type': 'serper'
                             })
                             
-                    if new_results > 0:
-                        break  # Found results, don't need to try more queries
+                    if organic_results:
+                        break  # Found results, stop searching
                         
-                elif response.status_code == 403:
-                    print("DEBUG: API quota exceeded or permissions issue")
-                    error_data = response.json()
-                    print(f"DEBUG: Error details: {error_data}")
-                    break
                 else:
-                    print(f"DEBUG: API error {response.status_code}: {response.text}")
+                    print(f"DEBUG: Serper API error {response.status_code}: {response.text}")
                     
             except Exception as e:
-                print(f"Search error for query '{query}': {e}")
-                continue  # Try next query
+                print(f"Serper search error for query '{query}': {e}")
+                continue
         
-        print(f"DEBUG: Total unique results found: {len(results)}")
-        
-        # If still no results, try a very broad search
-        if not results:
-            try:
-                fallback_query = broad_name if broad_name != institution_name else institution_name.split()[0]
-                print(f"DEBUG: Final fallback search: {fallback_query}")
-                
-                response = requests.get(
-                    base_url,
-                    params={
-                        'key': google_api_key,
-                        'cx': search_engine_id,
-                        'q': fallback_query,
-                        'num': 5
-                    },
-                    timeout=30
-                )
-                
-                if response.status_code == 200:
-                    data = response.json()
-                    for item in data.get('items', []):
-                        results.append({
-                            'title': item.get('title', ''),
-                            'link': item.get('link', ''),
-                            'snippet': item.get('snippet', ''),
-                            'match_type': 'fallback'
-                        })
-                    print(f"DEBUG: Fallback search found {len(results)} results")
-            except Exception as e:
-                print(f"Fallback search error: {e}")
+        print(f"DEBUG: Total Serper results found: {len(results)}")
         
         if not results:
-            print("DEBUG: No results found, using manual fallback")
             return self._fallback_search(institution_name)
         
         return results[:10]
