@@ -138,7 +138,8 @@ class InstitutionLookupService:
         Args:
             valid_countries: List of valid country names from institution table
         """
-        self.serper_api_key = os.getenv('SERPER_API_KEY', '')
+        self.google_api_key = os.getenv('GOOGLE_API_KEY', '')
+        self.search_engine_id = os.getenv('GOOGLE_SEARCH_ENGINE_ID', '')
         self.openai_api_key = os.getenv('OPENAI_API_KEY', '')
         self.openai_client = OpenAI(api_key=self.openai_api_key) if self.openai_api_key else None
         

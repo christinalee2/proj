@@ -1,6 +1,7 @@
 import os
 from typing import Dict, List
 from datetime import datetime
+import streamlit as st 
 
 
 def get_env_var(key: str, default: str = '') -> str:
@@ -35,9 +36,37 @@ OPENAI_API_KEY = get_env_var('OPENAI_API_KEY', '')
 AWS_ACCESS_KEY_ID = get_env_var('AWS_ACCESS_KEY_ID', '')
 AWS_SECRET_ACCESS_KEY = get_env_var('AWS_SECRET_ACCESS_KEY', '')
 
-CURRENT_YEAR = datetime.now().year
+CURRENT_YEAR = int(datetime.now().year)
 FUZZY_MATCH_THRESHOLD = 85
 MAX_BULK_UPLOAD_ROWS = 1000
+
+AUDIT_FIELDS = ['created_by', 'created_at', 'updated_by', 'updated_at']
+
+YEAR_FIELD_PATTERNS = ['last_verified', 'year', 'year_added']
+
+
+def should_auto_populate_year(field_name: str) -> bool:
+    """Check if a field should be auto-populated with current year"""
+    field_lower = field_name.lower()
+    return any(pattern in field_lower for pattern in YEAR_FIELD_PATTERNS)
+
+def get_audit_data(username: str) -> Dict[str, str]:
+    """
+    Get audit data for database operations
+    
+    Args:
+        username: Username performing the operation
+        is_update: True if this is an update, False if new record
+        
+    Returns:
+        Dictionary with audit fields
+    """
+    current_time = CURRENT_YEAR
+    
+    return {
+        'created_by': username,
+        'created_at': CURRENT_YEAR,
+    }
 
 SUFFIX_MAPPINGS: Dict[str, Dict[str, str]] = {
     'layer1': {
@@ -127,7 +156,7 @@ TABLE_SCHEMAS = {
     'institution': {
         'required_fields': ['institution_cpi', 'last_verified'],
         'optional_fields': [
-            'id_institution',
+            'id_institution_cpi',
             'institution_cpi_short',
             'institution_type_layer1',
             'institution_type_layer2',

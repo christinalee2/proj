@@ -12,6 +12,7 @@ from utils.text_processing import TextProcessor
 from utils.fuzzy_matching import get_fitted_matcher
 from services.standardization_service import StandardizationService
 import time
+from config import CURRENT_YEAR, should_auto_populate_year, get_audit_data, AUDIT_FIELDS
 
 
 @dataclass
@@ -132,8 +133,68 @@ def get_table_dropdown_options(table_name: str, config: TableConfig) -> Dict[str
         return options
 
 
+# def ensure_proper_data_types(data: Dict[str, Any]) -> Dict[str, Any]:
+#     """
+#     Ensure proper data types for database insertion, particularly for integer fields
+#     that can cause Parquet schema conflicts
+#     """
+#     from config import CURRENT_YEAR
+    
+#     data_copy = data.copy()
+    
+#     # Fields that should always be integers
+#     integer_fields = ['last_verified', 'created_at', 'year_added']
+#     # Also handle any field with 'year' in the name or starting with 'id_'
+#     for field_name in data_copy.keys():
+#         if 'year' in field_name.lower() or field_name.startswith('id_') or field_name in integer_fields:
+#             value = data_copy[field_name]
+#             try:
+#                 if value is None or value == '' or str(value).strip() == '':
+#                     if field_name in ['last_verified', 'created_at'] or 'year' in field_name.lower():
+#                         data_copy[field_name] = int(CURRENT_YEAR)
+#                     else:
+#                         data_copy[field_name] = None
+#                 else:
+#                     # Convert to int, handling both string and float inputs
+#                     data_copy[field_name] = int(float(str(value).strip()))
+#             except (ValueError, TypeError):
+#                 if field_name in ['last_verified', 'created_at'] or 'year' in field_name.lower():
+#                     data_copy[field_name] = int(CURRENT_YEAR)
+#                 else:
+#                     data_copy[field_name] = None
+    
+#     return data_copy
+
+def auto_populate_data(data: Dict[str, Any], username: str) -> Dict[str, Any]:
+    """
+    Auto-populate year fields and audit fields for any table entry
+    
+    Args:
+        data: The form data dictionary
+        username: Username for audit trail
+        
+    Returns:
+        Updated data dictionary with auto-populated fields
+    """
+    enhanced_data = data.copy()
+    
+    # Auto-populate year fields with current year if empty
+    for field_name, value in enhanced_data.items():
+        if should_auto_populate_year(field_name):
+            if not value or str(value).strip() == '':
+                enhanced_data[field_name] = CURRENT_YEAR
+                print(f"Auto-populated {field_name} with {CURRENT_YEAR}")
+    
+    audit_data = get_audit_data(username)
+    enhanced_data.update(audit_data)
+    
+    return enhanced_data
+
+
 def create_table_entry(table_name: str, data: Dict[str, Any], user: str = "system") -> Dict[str, Any]:
     """Create entry in any table using appropriate service"""
+
+    data = auto_populate_data(data, user)
     
     if table_name == 'institution':
         # Use existing institution service
@@ -148,12 +209,51 @@ def create_table_entry(table_name: str, data: Dict[str, Any], user: str = "syste
             double_counting_risk=data.get('double_counting_risk'),
             contact_info=data.get('contact_info'),
             comments=data.get('comments'),
-            user=user
+            user=user,
+            created_by=data.get('created_by'),
+            created_at=data.get('created_at'),
         )
     else:
         # For other tables, use direct database insertion, could probably make institution here too, I just set it up on institution service initially
         try:
-            clean_data = {k: v for k, v in data.items() if v is not None and str(v).strip() != ''}
+            # Get table configuration
+            config = get_table_config(table_name)
+            if not config:
+                return {'success': False, 'message': f'No configuration for table {table_name}'}
+            
+            # Create clean data structure EXACTLY like InstitutionService
+            clean_data = {}
+            
+            # Add form data (only non-None, non-empty values)
+            for field_config in config.fields:
+                field_name = field_config.name
+                if field_name in data and data[field_name] is not None and str(data[field_name]).strip() != '':
+                    clean_data[field_name] = data[field_name]
+            
+            # EXACTLY like institution service - set these as integers
+            clean_data['created_at'] = CURRENT_YEAR     # Explicit integer like institution service
+            clean_data['created_by'] = user             # Explicit string like institution service
+
+            year_fields = ['last_verified', 'year', 'year_added', 'year_of_analysis']
+            for year_field in year_fields:
+                if any(field.name == year_field for field in config.fields):
+                    clean_data[year_field] = CURRENT_YEAR  # Set the year field for this table
+
+            integer_fields = ['m49_code', 'iso_numeric_code']
+            for field in integer_fields:
+                if field in clean_data:
+                    value = clean_data[field]
+                    # Check if value is empty, None, or whitespace
+                    if value is None or str(value).strip() == '':
+                        clean_data[field] = None  # Explicitly set to None for empty values
+                    else:
+                        try:
+                            clean_data[field] = int(float(str(value).strip()))
+                        except (ValueError, TypeError):
+                            clean_data[field] = None
+            
+            # Remove None values EXACTLY like institution service does
+            clean_data = {k: v for k, v in clean_data.items() if v is not None}
             
             query_service = QueryService()
             success = query_service.execute_insert(table_name, clean_data)
@@ -161,7 +261,7 @@ def create_table_entry(table_name: str, data: Dict[str, Any], user: str = "syste
             if success:
                 return {
                     'success': True,
-                    'entry_id': clean_data.get(list(clean_data.keys())[0]),  # Use first field as ID
+                    'entry_id': clean_data.get(list(clean_data.keys())[0]),
                     'message': 'Entry created successfully'
                 }
             else:
@@ -174,6 +274,28 @@ def create_table_entry(table_name: str, data: Dict[str, Any], user: str = "syste
                 'success': False,
                 'message': f'Error creating entry: {str(e)}'
             }
+        # try:
+        #     clean_data = {k: v for k, v in data.items() if v is not None and str(v).strip() != ''}
+            
+        #     query_service = QueryService()
+        #     success = query_service.execute_insert(table_name, clean_data)
+            
+        #     if success:
+        #         return {
+        #             'success': True,
+        #             'entry_id': clean_data.get(list(clean_data.keys())[0]),  # Use first field as ID
+        #             'message': 'Entry created successfully'
+        #         }
+        #     else:
+        #         return {
+        #             'success': False,
+        #             'message': 'Failed to insert into database'
+        #         }
+        # except Exception as e:
+        #     return {
+        #         'success': False,
+        #         'message': f'Error creating entry: {str(e)}'
+        #     }
 
 
 def render_form_field(field_config, dropdown_options: Dict[str, List[str]], key_suffix: str) -> Any:
@@ -626,7 +748,7 @@ def render_enhanced_bulk_upload_grid(validation_results: List[ValidationResult],
     
     st.markdown("---")
     
-    render_enhanced_grid_header()
+    render_enhanced_grid_header(config)
     
     rows_to_show_fuzzy = [r for r in fuzzy_results if st.session_state[f'{session_key}_user_decisions'].get(r.row_index) != 'skip']
     rows_to_show_valid = [r for r in valid_results if st.session_state[f'{session_key}_user_decisions'].get(r.row_index) != 'skip']
@@ -669,8 +791,8 @@ def render_enhanced_bulk_upload_grid(validation_results: List[ValidationResult],
             execute_unified_bulk_insert(validation_results, config, session_key, table_name)
 
 
-def render_enhanced_grid_header():
-    """Enhanced grid header - same as original without Match column"""
+def render_enhanced_grid_header(config: TableConfig):
+    """Enhanced grid header - dynamic based on table configuration"""
     st.markdown("""
     <style>
     .institution-name {
@@ -689,24 +811,34 @@ def render_enhanced_grid_header():
     </style>
     """, unsafe_allow_html=True)
     
-    # Back to original column layout
-    cols = st.columns([2, 1.5, 1.5, 1.5, 1.5, 1.5, 0.5, 0.3])
+    # Determine which fields to show in the grid (limit to main category fields for display)
+    main_fields = [f for f in config.fields if f.category == 'main' and f.name not in ['created_by', 'created_at']]
     
-    with cols[0]:
-        st.markdown("**Institution Name**")
-    with cols[1]:
-        st.markdown("**Type Layer 1**")
-    with cols[2]:
-        st.markdown("**Type Layer 2**")
-    with cols[3]:
-        st.markdown("**Type Layer 3**")
-    with cols[4]:
-        st.markdown("**Country (Sub)**")
-    with cols[5]:
-        st.markdown("**Country (Parent)**")
-    with cols[6]:
+    # Always include the primary field first
+    primary_field = next((f for f in config.fields if f.name in config.required_fields), config.fields[0])
+    if primary_field not in main_fields:
+        main_fields.insert(0, primary_field)
+    
+    # Limit to 6 fields for display + lookup button + action button
+    display_fields = main_fields[:6]
+    
+    # Dynamic column layout based on number of fields
+    if len(display_fields) <= 3:
+        col_widths = [3] + [2] * len(display_fields) + [1, 0.5]  # Wider columns for fewer fields
+    else:
+        col_widths = [2] + [1.5] * len(display_fields) + [0.5, 0.3]  # Standard layout
+    
+    cols = st.columns(col_widths)
+    
+    # Render headers dynamically
+    for i, field in enumerate(display_fields):
+        with cols[i]:
+            st.markdown(f"**{field.display_name}**")
+    
+    # Lookup and action columns
+    with cols[len(display_fields)]:
         st.markdown("**Lookup**")
-    with cols[7]:
+    with cols[len(display_fields) + 1]:
         st.markdown("")
 
 
@@ -777,8 +909,24 @@ def render_enhanced_grid_row(result: ValidationResult, config: TableConfig, sess
                     st.session_state[f'show_match_dropdown_{result.row_index}'] = False
                     st.rerun()
         
-        # Main row with original column layout
-        cols = st.columns([2, 1.5, 1.5, 1.5, 1.5, 1.5, 0.5, 0.3])
+        # Dynamic column layout based on table configuration
+        main_fields = [f for f in config.fields if f.category == 'main' and f.name not in ['created_by', 'created_at']]
+        
+        # Always include the primary field first
+        primary_field = next((f for f in config.fields if f.name in config.required_fields), config.fields[0])
+        if primary_field not in main_fields:
+            main_fields.insert(0, primary_field)
+        
+        # Limit to 6 fields for display + lookup button + action button
+        display_fields = main_fields[:6]
+        
+        # Dynamic column layout based on number of fields
+        if len(display_fields) <= 3:
+            col_widths = [3] + [2] * len(display_fields) + [1, 0.5]  # Wider columns for fewer fields
+        else:
+            col_widths = [2] + [1.5] * len(display_fields) + [0.5, 0.3]  # Standard layout
+        
+        cols = st.columns(col_widths)
         
         dropdown_options = get_table_dropdown_options(table_name, config)
         
@@ -790,107 +938,26 @@ def render_enhanced_grid_row(result: ValidationResult, config: TableConfig, sess
                 name_display = f"{name_display}"
             st.markdown(f"<div class='institution-name'>{name_display}</div>", unsafe_allow_html=True)
         
-        # Rest of the columns (Type layers, Countries, etc.) - for institution table
-        if table_name == 'institution':
-            with cols[1]:
-                # Type Layer 1
-                default_val = row_data.get('institution_type_layer1', '')
-                if not default_val and lookup_result and hasattr(lookup_result, 'institution_type_layer1'):
-                    default_val = lookup_result.institution_type_layer1 or ''
-                
-                options = dropdown_options.get('institution_type_layer1', [''])
-                idx = options.index(default_val) if default_val in options else 0
-                new_val = st.selectbox(
-                    "type1",
-                    options,
-                    index=idx,
-                    key=f"type1_{result.row_index}_{session_key}",
-                    label_visibility="collapsed"
-                )
-                if new_val != row_data.get('institution_type_layer1'):
-                    st.session_state[f'{session_key}_edited_data'][result.row_index]['institution_type_layer1'] = new_val
-            
-            with cols[2]:
-                # Type Layer 2
-                default_val = row_data.get('institution_type_layer2', '')
-                if not default_val and lookup_result and hasattr(lookup_result, 'institution_type_layer2'):
-                    default_val = lookup_result.institution_type_layer2 or ''
-                
-                options = dropdown_options.get('institution_type_layer2', [''])
-                idx = options.index(default_val) if default_val in options else 0
-                new_val = st.selectbox(
-                    "type2",
-                    options,
-                    index=idx,
-                    key=f"type2_{result.row_index}_{session_key}",
-                    label_visibility="collapsed"
-                )
-                if new_val != row_data.get('institution_type_layer2'):
-                    st.session_state[f'{session_key}_edited_data'][result.row_index]['institution_type_layer2'] = new_val
-            
-            with cols[3]:
-                # Type Layer 3
-                default_val = row_data.get('institution_type_layer3', '')
-                if not default_val and lookup_result and hasattr(lookup_result, 'institution_type_layer3'):
-                    default_val = lookup_result.institution_type_layer3 or ''
-                
-                options = dropdown_options.get('institution_type_layer3', [''])
-                idx = options.index(default_val) if default_val in options else 0
-                new_val = st.selectbox(
-                    "type3",
-                    options,
-                    index=idx,
-                    key=f"type3_{result.row_index}_{session_key}",
-                    label_visibility="collapsed"
-                )
-                if new_val != row_data.get('institution_type_layer3'):
-                    st.session_state[f'{session_key}_edited_data'][result.row_index]['institution_type_layer3'] = new_val
-            
-            with cols[4]:
-                # Country Sub
-                default_val = row_data.get('country_sub', '')
-                if not default_val and lookup_result and hasattr(lookup_result, 'subsidiary_country'):
-                    default_val = lookup_result.subsidiary_country or ''
-                
-                options = dropdown_options.get('country_sub', [''])
-                idx = options.index(default_val) if default_val in options else 0
-                new_val = st.selectbox(
-                    "csub",
-                    options,
-                    index=idx,
-                    key=f"csub_{result.row_index}_{session_key}",
-                    label_visibility="collapsed"
-                )
-                if new_val != row_data.get('country_sub'):
-                    st.session_state[f'{session_key}_edited_data'][result.row_index]['country_sub'] = new_val
-            
-            with cols[5]:
-                # Country Parent
-                default_val = row_data.get('country_parent', '')
-                if not default_val and lookup_result and hasattr(lookup_result, 'parent_country'):
-                    default_val = lookup_result.parent_country or ''
-                
-                options = dropdown_options.get('country_parent', [''])
-                idx = options.index(default_val) if default_val in options else 0
-                new_val = st.selectbox(
-                    "cpar",
-                    options,
-                    index=idx,
-                    key=f"cpar_{result.row_index}_{session_key}",
-                    label_visibility="collapsed"
-                )
-                if new_val != row_data.get('country_parent'):
-                    st.session_state[f'{session_key}_edited_data'][result.row_index]['country_parent'] = new_val
-
-        
-        else:
-            # For other tables, show the first few select fields dynamically
-            select_fields = [f for f in config.fields if f.field_type == 'select' and f.name != (config.required_fields[0] if config.required_fields else config.fields[0].name)][:5]
-            
-            for i, field in enumerate(select_fields):
-                if i + 1 < len(cols) - 2:  # Make sure we don't exceed column count
-                    with cols[i + 1]:
-                        current_value = row_data.get(field.name, '')
+        # Render the other fields dynamically
+        for i, field in enumerate(display_fields[1:], 1):  # Skip the first field (already shown)
+            if i < len(cols) - 2:  # Leave space for lookup and action columns
+                with cols[i]:
+                    current_value = row_data.get(field.name, '')
+                    
+                    # Handle special institution lookup integration for institution fields
+                    if table_name == 'institution' and lookup_result:
+                        if field.name == 'institution_type_layer1' and hasattr(lookup_result, 'institution_type_layer1'):
+                            current_value = current_value or lookup_result.institution_type_layer1 or ''
+                        elif field.name == 'institution_type_layer2' and hasattr(lookup_result, 'institution_type_layer2'):
+                            current_value = current_value or lookup_result.institution_type_layer2 or ''
+                        elif field.name == 'institution_type_layer3' and hasattr(lookup_result, 'institution_type_layer3'):
+                            current_value = current_value or lookup_result.institution_type_layer3 or ''
+                        elif field.name == 'country_sub' and hasattr(lookup_result, 'subsidiary_country'):
+                            current_value = current_value or lookup_result.subsidiary_country or ''
+                        elif field.name == 'country_parent' and hasattr(lookup_result, 'parent_country'):
+                            current_value = current_value or lookup_result.parent_country or ''
+                    
+                    if field.field_type == 'select':
                         options = dropdown_options.get(field.name, [''])
                         idx = options.index(current_value) if current_value in options else 0
                         
@@ -904,15 +971,51 @@ def render_enhanced_grid_row(result: ValidationResult, config: TableConfig, sess
                         
                         if new_val != row_data.get(field.name):
                             st.session_state[f'{session_key}_edited_data'][result.row_index][field.name] = new_val
+                    
+                    elif field.field_type == 'text':
+                        new_val = st.text_input(
+                            field.name,
+                            value=current_value,
+                            key=f"{field.name}_{result.row_index}_{session_key}",
+                            label_visibility="collapsed"
+                        )
+                        
+                        if new_val != row_data.get(field.name):
+                            st.session_state[f'{session_key}_edited_data'][result.row_index][field.name] = new_val
+                    
+                    elif field.field_type == 'number':
+                        try:
+                            current_numeric = float(current_value) if current_value and str(current_value).strip() else 0.0
+                        except:
+                            current_numeric = 0.0
+                            
+                        new_val = st.number_input(
+                            field.name,
+                            value=current_numeric,
+                            key=f"{field.name}_{result.row_index}_{session_key}",
+                            label_visibility="collapsed"
+                        )
+                        
+                        if new_val != row_data.get(field.name):
+                            st.session_state[f'{session_key}_edited_data'][result.row_index][field.name] = new_val
+                    
+                    else:
+                        # For other field types, show as text
+                        st.text(current_value or '')
         
-        with cols[6]:
+        # Lookup button
+        lookup_col_index = len(display_fields) if len(display_fields) < len(cols) - 1 else len(cols) - 2
+        with cols[lookup_col_index]:
             # Lookup button (only for institution table)
             if table_name == 'institution':
                 if st.button("🔍", key=f"lookup_btn_{result.row_index}_{session_key}", help="Auto-lookup"):
                     run_single_lookup(result, table_name, session_key)
             else:
                 st.markdown("")
-        with cols[7]:
+        
+        # Action button
+        action_col_index = len(display_fields) + 1 if len(display_fields) < len(cols) - 1 else len(cols) - 1
+        with cols[action_col_index]:
             # Discard button (X) - also removes pending mappings
             if st.button("✕", key=f"discard_row_{result.row_index}_{session_key}", help="Remove this row"):
                 st.session_state[f'{session_key}_user_decisions'][result.row_index] = 'skip'
@@ -948,12 +1051,44 @@ def render_template_download(table_name: str, config: TableConfig):
     with st.expander("Download Template"):
         template_data = {}
         for field_config in config.fields:
+            # Generate meaningful examples based on field type and name
             if field_config.field_type == 'number':
-                example_value = 2024 if 'year' in field_config.name.lower() else 1.0
+                if 'year' in field_config.name.lower() or field_config.name in ['last_verified', 'created_at', 'year_added', 'year_of_analysis']:
+                    example_value = 2025
+                elif field_config.name in ['gearing', 'multiplier_local', 'multiplier_usd', 'fx_rate', 'conversion_rate']:
+                    example_value = 1.5
+                elif field_config.name in ['m49_code', 'iso_numeric_code']:
+                    example_value = 840  # Example numeric code
+                else:
+                    example_value = 1.0
             elif field_config.field_type == 'boolean':
                 example_value = 'True'
-            else:
+            elif field_config.field_type == 'select':
                 example_value = f'Example {field_config.display_name}'
+            elif field_config.field_type == 'textarea':
+                if field_config.name in ['definition', 'description']:
+                    example_value = f'Description of this {field_config.display_name.lower()}'
+                elif field_config.name in ['comments', 'notes']:
+                    example_value = 'Additional notes or comments'
+                else:
+                    example_value = f'Example {field_config.display_name}'
+            else:  # text fields
+                if 'country' in field_config.name.lower():
+                    example_value = 'United States'
+                elif 'currency' in field_config.name.lower():
+                    example_value = 'USD'
+                elif 'institution' in field_config.name.lower():
+                    example_value = 'Example Institution Name'
+                elif field_config.name in ['sector_re', 'sub_sector_source', 'sub_sector_bnef']:
+                    example_value = 'Solar'
+                elif field_config.name in ['instrument_original', 'instrument_type']:
+                    example_value = 'Green Bond'
+                elif field_config.name in ['iso2_code']:
+                    example_value = 'US'
+                elif field_config.name in ['iso3_code']:
+                    example_value = 'USA'
+                else:
+                    example_value = f'Example {field_config.display_name}'
             
             template_data[field_config.name] = [example_value, '']
         
@@ -1266,11 +1401,12 @@ def run_single_lookup(result: ValidationResult, table_name: str, session_key: st
 
 
 def run_batch_lookup(results: List[ValidationResult], table_name: str, session_key: str):
-    """Run auto-lookup for multiple entries in batches"""
+    """Run auto-lookup for multiple entries"""
     if table_name != 'institution':
         st.info("Auto-lookup is only available for institution table")
         return
     
+    # Filter for records that need lookup and are set to insert
     missing_data_results = [
         r for r in results 
         if (not st.session_state.get(f'{session_key}_edited_data', {}).get(r.row_index, {}).get('institution_type_layer1') or 
@@ -1282,12 +1418,12 @@ def run_batch_lookup(results: List[ValidationResult], table_name: str, session_k
         st.info("No incomplete records found.")
         return
     
-    batch_size = 1
-    total_results = len(missing_data_results)
+    lookup_limit = min(len(missing_data_results), 20)
     
     try:
         from services.institution_lookup_service import InstitutionLookupService
         
+        # Initialize lookup service
         existing_data = get_table_data_cached('institution', limit=None)
         valid_countries = set()
         if not existing_data.empty:
@@ -1301,61 +1437,45 @@ def run_batch_lookup(results: List[ValidationResult], table_name: str, session_k
         progress_bar = st.progress(0)
         status_text = st.empty()
         
+        # Initialize session state
         if f'{session_key}_lookup_results' not in st.session_state:
             st.session_state[f'{session_key}_lookup_results'] = {}
         if f'{session_key}_edited_data' not in st.session_state:
             st.session_state[f'{session_key}_edited_data'] = {}
         
-        # Process in batches
-        for batch_start in range(0, total_results, batch_size):
-            batch_end = min(batch_start + batch_size, total_results)
-            current_batch = missing_data_results[batch_start:batch_end]
+        for idx, result in enumerate(missing_data_results[:lookup_limit]):
+            institution_name = result.data.get('institution_cpi')
+            status_text.text(f"Looking up {idx + 1}/{lookup_limit}: {institution_name}")
             
-            status_text.text(f"Processing batch {batch_start//batch_size + 1} of {(total_results + batch_size - 1)//batch_size}")
-            
-            for idx, result in enumerate(current_batch):
-                global_idx = batch_start + idx
-                # institution_name = result.data.get('institution_cpi')
-                institution_name = str(result.data.get('institution_cpi', '')).strip()
-                status_text.text(f"Looking up {global_idx + 1}/{total_results}: {institution_name}")
+            try:
+                lookup_result = lookup_service.lookup_institution(institution_name)
+                st.session_state[f'{session_key}_lookup_results'][result.row_index] = lookup_result
                 
-                try:
-                    lookup_result = lookup_service.lookup_institution(institution_name)
-                    st.session_state[f'{session_key}_lookup_results'][result.row_index] = lookup_result
+                if lookup_result.confidence_score >= 0.75:
+                    edited_data = st.session_state[f'{session_key}_edited_data'].get(result.row_index, result.data.copy())
                     
-                    if lookup_result.confidence_score >= 0.75:
-                        edited_data = st.session_state[f'{session_key}_edited_data'].get(result.row_index, result.data.copy())
-                        
-                        if lookup_result.institution_type_layer1:
-                            edited_data['institution_type_layer1'] = lookup_result.institution_type_layer1
-                        if lookup_result.institution_type_layer2:
-                            edited_data['institution_type_layer2'] = lookup_result.institution_type_layer2
-                        if lookup_result.institution_type_layer3:
-                            edited_data['institution_type_layer3'] = lookup_result.institution_type_layer3
-                        if lookup_result.subsidiary_country:
-                            edited_data['country_sub'] = lookup_result.subsidiary_country
-                        if lookup_result.parent_country:
-                            edited_data['country_parent'] = lookup_result.parent_country
-                        
-                        st.session_state[f'{session_key}_edited_data'][result.row_index] = edited_data
+                    # Update with lookup results
+                    if lookup_result.institution_type_layer1:
+                        edited_data['institution_type_layer1'] = lookup_result.institution_type_layer1
+                    if lookup_result.institution_type_layer2:
+                        edited_data['institution_type_layer2'] = lookup_result.institution_type_layer2
+                    if lookup_result.institution_type_layer3:
+                        edited_data['institution_type_layer3'] = lookup_result.institution_type_layer3
+                    if lookup_result.subsidiary_country:
+                        edited_data['country_sub'] = lookup_result.subsidiary_country
+                    if lookup_result.parent_country:
+                        edited_data['country_parent'] = lookup_result.parent_country
                     
-                except Exception as e:
-                    print(f"Lookup failed for {institution_name}: {str(e)}")
+                    st.session_state[f'{session_key}_edited_data'][result.row_index] = edited_data
                 
-                progress_bar.progress((global_idx + 1) / total_results)
-                
-                # Add delay between lookups for quality
-                if global_idx < total_results - 1:  # Don't delay after the last one
-                    time.sleep(1.0)  # 1 second delay
+            except Exception as e:
+                print(f"Lookup failed for {institution_name}: {str(e)}")
             
-            # Longer delay between batches to ensure high quality
-            if batch_end < total_results:
-                status_text.text(f"Completed batch {batch_start//batch_size + 1}. Pausing before next batch...")
-                time.sleep(3.0)  # 3 second pause between batches
+            progress_bar.progress((idx + 1) / lookup_limit)
         
         progress_bar.empty()
         status_text.empty()
-        st.success(f"Completed {total_results} lookups in {(total_results + batch_size - 1)//batch_size} batches")
+        st.success(f"Completed {lookup_limit} lookups")
         st.rerun()
         
     except Exception as e:
@@ -1414,7 +1534,38 @@ def execute_unified_bulk_insert(validation_results: List[ValidationResult], conf
             for result in records_to_insert:
                 try:
                     data_to_insert = st.session_state.get(f'{session_key}_edited_data', {}).get(result.row_index, result.data)
+
+                    # EXACTLY like institution service - set as integers
+                    data_to_insert['created_by'] = st.session_state.get('username', 'analyst')
+                    data_to_insert['created_at'] = CURRENT_YEAR      # Integer like institution service
+                    
+                    # Handle year field variations - each table has only one of these
+                    from table_configs import get_table_config
+                    config = get_table_config(table_name)
+                    if config:
+                        year_fields = ['last_verified', 'year', 'year_added']
+                        for year_field in year_fields:
+                            if any(field.name == year_field for field in config.fields):
+                                data_to_insert[year_field] = CURRENT_YEAR
+
+                    integer_fields = ['m49_code', 'iso_numeric_code']
+                    for field in integer_fields:
+                        if field in data_to_insert:
+                            value = data_to_insert[field]
+                            # Check if value is empty, None, or whitespace
+                            if value is None or str(value).strip() == '':
+                                data_to_insert[field] = None  # Explicitly set to None for empty values
+                            else:
+                                try:
+                                    data_to_insert[field] = int(float(str(value).strip()))
+                                except (ValueError, TypeError):
+                                    data_to_insert[field] = None
+                    
+                    # Remove None values EXACTLY like institution service does
+                    data_to_insert = {k: v for k, v in data_to_insert.items() if v is not None}
+                    
                     bulk_data.append(data_to_insert)
+                                        
                 except Exception as e:
                     insert_failed_count += 1
             

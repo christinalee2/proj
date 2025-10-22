@@ -37,7 +37,7 @@ class QueryService:
         """Retrieve all institutions from the database"""
         query = """
         SELECT 
-            id_institution,
+            id_institution_cpi,
             institution_cpi,
             institution_cpi_short,
             institution_type_layer1,
@@ -58,15 +58,15 @@ class QueryService:
                     return pd.DataFrame(result)
                 else:
                     return pd.DataFrame(columns=[
-                        'id_institution', 'institution_cpi', 'institution_cpi_short',
+                        'id_institution_cpi', 'institution_cpi', 'institution_cpi_short',
                         'institution_type_layer1', 'institution_type_layer2', 'institution_type_layer3',
-                        'country_sub', 'country_parent', 'last_verified'
+                        'country_sub', 'country_parent', 'last_verified', 'created_by', 'created_at'
                     ])
             else:
                 return pd.DataFrame(columns=[
-                    'id_institution', 'institution_cpi', 'institution_cpi_short',
+                    'id_institution_cpi', 'institution_cpi', 'institution_cpi_short',
                     'institution_type_layer1', 'institution_type_layer2', 'institution_type_layer3',
-                    'country_sub', 'country_parent', 'last_verified'
+                    'country_sub', 'country_parent', 'last_verified', 'created_by', 'created_at'
                 ])
         
         return result

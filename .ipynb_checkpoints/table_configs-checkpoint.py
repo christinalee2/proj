@@ -61,13 +61,21 @@ def validate_boolean(value: Any) -> bool:
     return str(value).lower() in ['true', 'false', '1', '0', 'yes', 'no']
 
 
+AUDIT_FIELDS = [
+    FieldConfig('created_by', 'Created By', 'text', category='audit',
+               help_text='Username who created this record'),
+    FieldConfig('created_at', 'Created At', 'number', category='audit',
+               help_text='Timestamp when record was created'),
+]
+
+
 #Can add any tables you want to these, should produce a clean version 
 TABLE_CONFIGS = {
     'institution': TableConfig(
         table_name='institution',
         display_name='Institution',
         description='Enter institution. If institution already exists in database, do not upload again. If there is a non-exact match click Keep to add to standardization table.',
-        primary_key_field='id_institution',
+        primary_key_field='id_institution_cpi',
         required_fields=['institution_cpi'],
         duplicate_check_fields=['institution_cpi'],
         fields=[
@@ -90,103 +98,66 @@ TABLE_CONFIGS = {
                        help_text='Contact details, website, etc.'),
             FieldConfig('comments', 'Comments', 'textarea',category='advanced',
                        help_text='Additional notes or comments'),
-        ]
+        ] + AUDIT_FIELDS
     ),
     
-    'geography': TableConfig(
-        table_name='geography',
-        display_name='Geography',
-        description='Countries, regions, and geographical classifications',
-        primary_key_field='id_geography_cpi',
-        required_fields=['country_cpi'],
-        duplicate_check_fields=['country_cpi'],
-        fields=[
-            FieldConfig('country_cpi', 'Country Name', 'text', required=True,
-                       help_text='Full country name',
-                       placeholder='Enter country name...'),
-            FieldConfig('region_cpi', 'Region', 'select', category='main',
-                       help_text='Regional classification'),
-            FieldConfig('region_cpi_granular', 'Granular Region', 'select', category='main'),
-            FieldConfig('region_cpi_additional', 'Additional Region', 'select', category='main'),
-            FieldConfig('global_north_south', 'Global North/South', 'select', category='main'),
-            FieldConfig('oecd_membership', 'OECD Member', 'select', category='main'),
-            FieldConfig('dac_membership', 'DAC Member', 'select', category='main'),
-            FieldConfig('income_level', 'Income Level', 'select', category='main'),
-            FieldConfig('development_status', 'Development Status', 'select', category='main'),
-            FieldConfig('iso2_code', 'ISO2 Code', 'text',
-                       help_text='2-letter ISO country code',
-                       placeholder='US, GB, etc.', category='main'),
-            FieldConfig('iso_numeric_code', 'ISO Numeric Code', 'text',
-                       help_text='numeric ISO code', category='main'),
-            FieldConfig('iso3_code', 'ISO3 Code', 'text',
-                       help_text='3-letter ISO country code',
-                       placeholder='USA, GBR, etc.', category='main'),
-            FieldConfig('sids', 'Small Island Developing States', 'select', category='main'),
-            FieldConfig('lldc', 'Landlocked Developing Countries', 'select', category='main'),
-            FieldConfig('unfccc_classification', 'UNFCCC Classification', 'select', category='main'),
-            FieldConfig('wb_classification', 'World Bank Classification', 'select', category='main'),
-            FieldConfig('r3_ipcc', 'IPCC R3', 'select', category='main'),
-            FieldConfig('r6_ipcc', 'IPCC R6', 'select', category='main'),
-            FieldConfig('r10_ipcc', 'IPCC R10', 'select', category='main'),
-            FieldConfig('development_status', 'CPI Development Status', 'select', category='main'),
-            FieldConfig('development_status_2', 'CPI Development Status 2', 'select', category='main'),
-            FieldConfig('region_un_m49', 'UN M49 Region', 'select', category='main'),
-            FieldConfig('m49_code', 'M49 code', 'select', category='main'),
-            FieldConfig('sub_region1_un_m49', 'M49 Sub-region', 'select', category='main'),
-        ]
-    ),
-                
-    # 'sector': TableConfig(
-    #     table_name='sector',
-    #     display_name='Sector',
-    #     description='Economic sectors and subsectors for classification',
-    #     primary_key_field='sector_key',
-    #     required_fields=['sector'],
-    #     duplicate_check_fields=['sector'],
+    # 'geography': TableConfig(
+    #     table_name='geography',
+    #     display_name='Geography',
+    #     description='Countries, regions, and geographical classifications',
+    #     primary_key_field='id_geography_cpi',
+    #     required_fields=['country_cpi'],
+    #     duplicate_check_fields=['country_cpi'],
     #     fields=[
-    #         FieldConfig('sector_key', 'Sector Key', 'text', required=True,
-    #                    help_text='Unique identifier for this sector',
-    #                    placeholder='Enter sector key...'),
-    #         FieldConfig('sector', 'Sector Name', 'text', required=True,
-    #                    help_text='Name of the sector',
-    #                    placeholder='Enter sector name...'),
-    #         FieldConfig('c1', 'Category 1', 'text'),
-    #         FieldConfig('sub_sector', 'Sub Sector', 'text',
-    #                    help_text='More specific sector classification'),
-    #         FieldConfig('c2', 'Category 2', 'text'),
-    #         FieldConfig('solution', 'Solution Type', 'text',
-    #                    help_text='Type of climate solution'),
-    #         FieldConfig('c3', 'Category 3', 'text'),
-    #         FieldConfig('re', 'Renewable Energy', 'select',
-    #                    options=['', 'True', 'False'],
-    #                    help_text='Is this renewable energy related?'),
-    #         FieldConfig('ff', 'Fossil Fuel', 'select',
-    #                    options=['', 'True', 'False']),
-    #         FieldConfig('ee', 'Energy Efficiency', 'select',
-    #                    options=['', 'True', 'False']),
-    #         FieldConfig('og', 'Oil & Gas', 'select',
-    #                    options=['', 'True', 'False']),
-    #         FieldConfig('lt', 'Low Temperature', 'select',
-    #                    options=['', 'True', 'False']),
-    #         FieldConfig('mi', 'Mitigation', 'select',
-    #                    options=['', 'True', 'False']),
-    #         FieldConfig('ad', 'Adaptation', 'select',
-    #                    options=['', 'True', 'False']),
-    #     ]
+    #         FieldConfig('country_cpi', 'Country Name', 'text', required=True,
+    #                    help_text='Full country name',
+    #                    placeholder='Enter country name...'),
+    #         FieldConfig('region_cpi', 'Region', 'select', category='main',
+    #                    help_text='Regional classification'),
+    #         FieldConfig('region_cpi_granular', 'Granular Region', 'select', category='main'),
+    #         FieldConfig('region_cpi_additional', 'Additional Region', 'select', category='main'),
+    #         FieldConfig('global_north_south', 'Global North/South', 'select', category='main'),
+    #         FieldConfig('oecd_membership', 'OECD Member', 'select', category='main'),
+    #         FieldConfig('dac_membership', 'DAC Member', 'select', category='main'),
+    #         FieldConfig('income_level', 'Income Level', 'select', category='main'),
+    #         FieldConfig('development_status', 'Development Status', 'select', category='main'),
+    #         FieldConfig('iso2_code', 'ISO2 Code', 'text',
+    #                    help_text='2-letter ISO country code',
+    #                    placeholder='US, GB, etc.', category='main'),
+    #         FieldConfig('iso_numeric_code', 'ISO Numeric Code', 'text',
+    #                    help_text='numeric ISO code', category='main'),
+    #         FieldConfig('iso3_code', 'ISO3 Code', 'text',
+    #                    help_text='3-letter ISO country code',
+    #                    placeholder='USA, GBR, etc.', category='main'),
+    #         FieldConfig('sids', 'Small Island Developing States', 'select', category='main'),
+    #         FieldConfig('lldc', 'Landlocked Developing Countries', 'select', category='main'),
+    #         FieldConfig('unfccc_classification', 'UNFCCC Classification', 'select', category='main'),
+    #         FieldConfig('wb_classification', 'World Bank Classification', 'select', category='main'),
+    #         FieldConfig('r3_ipcc', 'IPCC R3', 'select', category='main'),
+    #         FieldConfig('r6_ipcc', 'IPCC R6', 'select', category='main'),
+    #         FieldConfig('r10_ipcc', 'IPCC R10', 'select', category='main'),
+    #         FieldConfig('development_status', 'CPI Development Status', 'select', category='main'),
+    #         FieldConfig('development_status_2', 'CPI Development Status 2', 'select', category='main'),
+    #         FieldConfig('region_un_m49', 'UN M49 Region', 'select', category='main'),
+    #         FieldConfig('m49_code', 'M49 code', 'number', category='main'),
+    #         FieldConfig('sub_region1_un_m49', 'M49 Sub-region', 'select', category='main'),
+    #         FieldConfig('year_added', 'Year Added', 'number')  
+    #     ] + AUDIT_FIELDS
     # ),
+
     
     'instrument': TableConfig(
         table_name='instrument',
         display_name='Instrument',
         description='Instruments',
         primary_key_field='id_instrument',
-        required_fields=['original_name', 'instrument_type'],
+        required_fields=['original_name'],
         duplicate_check_fields=['original_name'],
         fields=[
-            FieldConfig('instrument_original', 'Original Instrument Name (from source)', 'text', category='main',
+            FieldConfig('original_name', 'Original Instrument Name (from source)', 'text', required=True,
                        help_text='Type of financial instrument',
                        placeholder='Enter instrument name...'),
-            FieldConfig('instrument_type', 'Instrument Type', 'text', category='main',
+            FieldConfig('instrument_type', 'Instrument Type', 'select', category='main',
                        help_text='Type of financial instrument',
                        placeholder='Enter instrument type...'),
             FieldConfig('instrument_type_layer2', 'Type Layer 2', 'select', category='main'),
@@ -199,7 +170,7 @@ TABLE_CONFIGS = {
                        help_text='Detailed description', category='main'),
             FieldConfig('example', 'Example', 'textarea',
                        help_text='Example of this instrument in use', category='main'),
-        ]
+        ] + AUDIT_FIELDS
     ),
 
     'gearing': TableConfig(
@@ -207,17 +178,18 @@ TABLE_CONFIGS = {
         display_name='Gearing Ratios',
         description='Gearing ratios',
         primary_key_field='id_gearing',
-        required_fields=['gearing', 'sector_re', 'country_cpi', 'region_cpi', 'source'],
+        required_fields=['sector_re'],
         duplicate_check_fields=['gearing', 'sector_re', 'country_cpi', 'region_cpi', 'source'],
         fields=[
-            FieldConfig('sector_re', 'Sector', 'select', category='main',
+            FieldConfig('sector_re', 'Sector', 'select', category='main', required=True,
                        help_text='Sector'),
             FieldConfig('country_cpi', 'Country', 'text', category='main',
                        help_text='Country'),
             FieldConfig('region_cpi', 'Region', 'select', category='main'),
-            FieldConfig('gearing', 'Gearing Ratio', 'text', category='main'),
+            FieldConfig('gearing', 'Gearing Ratio', 'number', category='main'),
             FieldConfig('source', 'Source', 'test', category='main'),
-        ]
+            FieldConfig('last_verified', 'Last verified', 'number')  
+        ] + AUDIT_FIELDS
     ),
 
     'multiplier': TableConfig(
@@ -225,59 +197,46 @@ TABLE_CONFIGS = {
         display_name='Multipliers',
         description='Multipliers',
         primary_key_field='id_multiplier',
-        required_fields=['multiplier_local', 'sub_sector_source'],
+        required_fields=['sub_sector_source'],
         duplicate_check_fields=['multiplier_local', 'sub_sector_source'],
         fields=[
-            FieldConfig('multiplier_local', 'Multiplier', 'text', category='main'),
-            FieldConfig('sub_sector_source', 'Sub-sector name (from source)', 'text', category='main'),
+            FieldConfig('sub_sector_source', 'Sub-sector name (from source)', 'text', required=True),
+            FieldConfig('multiplier_local', 'Local Multiplier', 'number', category='main'),
             FieldConfig('sub_sector_bnef', 'Sub-sector name (BNEF)', 'select', category='main'),
             FieldConfig('country_cpi', 'Country', 'text', category='main'),
             FieldConfig('region_cpi', 'Region', 'select', category='main'),
-            FieldConfig('currency', 'Currency', 'text', category='main'),
-            FieldConfig('conversion', 'Conversion', 'select', category='main'),
-            FieldConfig('multiplier_usd', 'Multiplier', 'text', required=True),
+            FieldConfig('currency', 'Currency', 'select', category='main'),
+            FieldConfig('conversion_rate', 'Conversion', 'select', category='main'),
+            FieldConfig('multiplier_usd', 'Multiplier in USD', 'number', category='main'),
             FieldConfig('data_source_type', 'Data Source', 'select', category='main'),
             FieldConfig('notes', 'Notes', 'text', category='main'),
-        ]
+            FieldConfig('last_verified', 'Last verified', 'number'),
+            FieldConfig('year_of_analysis', 'Year of analysis', 'number')  
+        ] + AUDIT_FIELDS
     ),
-    
-    # 'data_source': TableConfig(
-    #     table_name='data_source',
-    #     display_name='Data Source',
-    #     description='Sources of data and their classifications',
-    #     primary_key_field='data_source_code',
-    #     required_fields=['data_source_name'],
-    #     duplicate_check_fields=['data_source_code', 'data_source_name'],
-    #     fields=[
-    #         FieldConfig('data_source_name', 'Data Source Name', 'text', required=True,
-    #                    help_text='Name of the data source',
-    #                    placeholder='Enter data source name...'),
-    #         FieldConfig('data_source_code', 'Data Source Code', 'text',
-    #                    help_text='Unique code for this data source',
-    #                    placeholder='Enter code...'),
-    #     ]
-    # ),
+
     
     'exchange_rates': TableConfig(
         table_name='exchange_rates',
         display_name='Exchange Rates',
         description='Currency exchange rates by country and year',
         primary_key_field='id_fx',
-        required_fields=['country_cpi', 'currency_code', 'year', 'fx_rate'],
+        required_fields=['country_cpi'],
         duplicate_check_fields=['country_cpi', 'currency_code', 'year'],
         fields=[
             FieldConfig('country_cpi', 'Country', 'select',
                        options=[],  # Will be populated from geography table
                        required=True,
                        help_text='Country for this exchange rate'),
-            FieldConfig('currency_code', 'Currency Code', 'text', required=True,
+            FieldConfig('currency_code', 'Currency Code', 'text', category='main',
                        help_text='3-letter currency code (USD, EUR, etc.)',
-                       placeholder='USD, EUR, GBP...', category='main'),
-            FieldConfig('fx_rate', 'Exchange Rate', 'number', required=True,
+                       placeholder='USD, EUR, GBP...'),
+            FieldConfig('fx_rate', 'Exchange Rate', 'number', category='main',
                        validation_fn=validate_decimal,
-                       help_text='Exchange rate to USD', category='main'),
-        ]
-    ),
+                       help_text='Exchange rate to USD'),
+            FieldConfig('year', 'Year', 'number')  
+        ] + AUDIT_FIELDS
+    ), 
     
     'institution_standardization': TableConfig(
         table_name='institution_standardization',
@@ -292,24 +251,24 @@ TABLE_CONFIGS = {
                        placeholder='Enter institution name...'),
             FieldConfig('institution_cpi', 'Institution Standardized Name', 'select', category='main',
                        help_text='Only enter if you know the mapping for standardization already or adding a new institution.'),
-        ]
+        ] + AUDIT_FIELDS
     ),
     
-    'geography_standardization': TableConfig(
-        table_name='geography_standardization',
-        display_name='Geography Standardization',
-        description='Standardization table for geography list. Typically no need to edit.',
-        primary_key_field='id_geography',
-        required_fields=['country_original'],
-        duplicate_check_fields=['country_cpi', 'country_original'],
-        fields=[
-            FieldConfig('country_original', 'Country Name', 'text', required=True,
-                       help_text='Full name of the country',
-                       placeholder='Enter country name...'),
-            FieldConfig('country_cpi', 'Country Standardized Name', 'select', category='main',
-                       help_text='Only enter if you know the mapping for standardization already or adding a new country.'),
-        ]
-    ),
+    # 'geography_standardization': TableConfig(
+    #     table_name='geography_standardization',
+    #     display_name='Geography Standardization',
+    #     description='Standardization table for geography list. Typically no need to edit.',
+    #     primary_key_field='id_geography',
+    #     required_fields=['country_original'],
+    #     duplicate_check_fields=['country_cpi', 'country_original'],
+    #     fields=[
+    #         FieldConfig('country_original', 'Country Name', 'text', required=True,
+    #                    help_text='Full name of the country',
+    #                    placeholder='Enter country name...'),
+    #         FieldConfig('country_cpi', 'Country Standardized Name', 'select', category='main',
+    #                    help_text='Only enter if you know the mapping for standardization already or adding a new country.'),
+    #     ] + AUDIT_FIELDS
+    # ),
 }
 
 

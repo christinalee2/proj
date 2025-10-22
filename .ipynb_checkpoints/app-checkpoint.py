@@ -3,7 +3,6 @@ import pandas as pd
 from datetime import datetime
 from dotenv import load_dotenv
 
-# Import the new modular components
 from table_configs import get_available_tables, get_table_display_names, get_table_config
 
 from database.cached_queries import get_table_data_cached
@@ -69,19 +68,18 @@ def render_sidebar():
             [
                 "Upload New Data",
                 "View Current Tables",
-                "NZFT"  # Add this line
+                "NZFT"  
             ],
             key="navigation",
             index=0 if st.session_state['current_page'] == 'Upload New Data' 
                   else 1 if st.session_state['current_page'] == 'View Current Tables'
-                  else 2  # Add this for NZFT
+                  else 2  
         )
         
         st.session_state['current_page'] = page
         
         st.markdown("---")
         
-        # Cache management
         st.subheader("Cache Management")
         col1, col2 = st.columns(2)
         
@@ -129,7 +127,6 @@ def render_upload_page():
     available_tables = get_available_tables()
     table_display_names = get_table_display_names()
     
-    # Create display options (show display names but store actual table names)
     display_options = [f"{table_display_names[table]} ({table})" for table in available_tables]
     
     selected_display = st.selectbox(
@@ -140,14 +137,12 @@ def render_upload_page():
         key="upload_table_selector"
     )
     
-    # Extract actual table name from display option
     selected_table = selected_display.split(' (')[-1].rstrip(')')
     st.session_state['selected_table'] = selected_table
     
     
     st.markdown("---")
     
-    # Upload method selection
     st.subheader("2. Upload Method")
     upload_method = st.radio(
         "How would you like to upload data?",
@@ -158,13 +153,10 @@ def render_upload_page():
     
     st.markdown("---")
     
-    # Render appropriate form
     if upload_method == "Single Entry Form":
-        # Use unified system for ALL tables (including institution)
         from ui.unified_table_forms import render_unified_single_entry_form
         render_unified_single_entry_form(selected_table)
     else:
-        # Use unified bulk upload for ALL tables (including institution)  
         from ui.unified_table_forms import render_unified_bulk_upload
         render_unified_bulk_upload(selected_table)
 
@@ -196,7 +188,6 @@ def render_table_view(table_name: str):
     
     st.markdown("---")
     
-    # Load and display data
     with st.spinner(f"Loading {config.display_name} data..."):
         try:
             df = get_table_data_cached(table_name, limit=None)
@@ -206,7 +197,6 @@ def render_table_view(table_name: str):
                 st.info(f"No data found in {config.display_name} table")
                 return
             
-            # Show metrics
             col1, col2, col3 = st.columns(3)
             with col1:
                 st.metric("Total Rows", f"{len(df):,}")
@@ -223,7 +213,6 @@ def render_table_view(table_name: str):
             
             st.markdown("---")
             
-            # Search functionality
             col1, col2 = st.columns([3, 1])
             
             with col1:
@@ -242,7 +231,6 @@ def render_table_view(table_name: str):
                     step=10
                 )
             
-            # Filter data
             if search_term:
                 mask = df.astype(str).apply(
                     lambda x: x.str.contains(search_term, case=False, na=False)
@@ -252,7 +240,6 @@ def render_table_view(table_name: str):
             else:
                 filtered_df = df.head(show_rows)
             
-            # Display data
             st.subheader(f"Data from {config.display_name} Table")
             st.dataframe(
                 filtered_df,
@@ -286,13 +273,11 @@ def render_view_tables_page():
     st.markdown("Browse your reference data")
     st.markdown("---")
     
-    # Table selection
     st.subheader("Select Table")
     
     available_tables = get_available_tables()
     table_display_names = get_table_display_names()
     
-    # Create display options
     display_options = [f"{table_display_names[table]} ({table})" for table in available_tables]
     
     selected_display = st.selectbox(
@@ -303,13 +288,11 @@ def render_view_tables_page():
         key="view_table_selector"
     )
     
-    # Extract actual table name
     selected_table = selected_display.split(' (')[-1].rstrip(')')
     st.session_state['selected_table'] = selected_table
     
     st.markdown("---")
     
-    # Render table view
     render_table_view(selected_table)
 
 

@@ -3,6 +3,7 @@ from datetime import datetime
 import uuid
 import pandas as pd
 from database.queries import QueryService
+from config import CURRENT_YEAR
 
 
 class AuditService:
@@ -41,7 +42,7 @@ class AuditService:
                     'old_value': None,
                     'new_value': str(new_value) if new_value is not None else None,
                     'changed_by': user,
-                    'changed_at': datetime.now().isoformat(),
+                    'changed_at': CURRENT_YEAR,
                     'notes': f'New record inserted into {table_name}'
                 }
                 
@@ -87,7 +88,7 @@ class AuditService:
                 'old_value': str(old_value) if old_value is not None else None,
                 'new_value': str(new_value) if new_value is not None else None,
                 'changed_by': user,
-                'changed_at': datetime.now().isoformat(),
+                'changed_at': CURRENT_YEAR,
                 'notes': notes or f'Updated {field_name} in {table_name}'
             }
             

@@ -4,8 +4,7 @@ from pyathena.cursor import Cursor
 from typing import Optional, Dict, Any, List
 import streamlit as st
 import pandas as pd
-from datetime import datetime
-from config import AWS_REGION, ATHENA_DATABASE, ATHENA_OUTPUT_LOCATION, S3_BUCKET
+from config import AWS_REGION, ATHENA_DATABASE, ATHENA_OUTPUT_LOCATION, S3_BUCKET, CURRENT_YEAR
 import os
 import traceback
 import io
@@ -61,6 +60,8 @@ class DatabaseConnection:
         'gender': f'{S3_BASE_PATH}/gender/data.parquet',
         'data_source': f'{S3_BASE_PATH}/data_source/data.parquet',
         'recipient': f'{S3_BASE_PATH}/recipient/data.parquet',
+        'multiplier': f'{S3_BASE_PATH}/multiplier/data.parquet',
+        'gearing': f'{S3_BASE_PATH}/gearing/data.parquet',
         'country_coefficients': f'{S3_BASE_PATH}/country_coefficients/data.parquet',
         'exchange_rates': f'{S3_BASE_PATH}/exchange_rates/data.parquet',
         'state_control': f'{S3_BASE_PATH}/state_control/data.parquet',
@@ -74,6 +75,8 @@ class DatabaseConnection:
         'geography': f's3://{S3_BUCKET}/{S3_BASE_PATH}/geography/',
         'sector': f's3://{S3_BUCKET}/{S3_BASE_PATH}/sector/',
         'instrument': f's3://{S3_BUCKET}/{S3_BASE_PATH}/instrument/',
+        'multiplier': f's3://{S3_BUCKET}/{S3_BASE_PATH}/multiplier/',
+        'gearing': f's3://{S3_BUCKET}/{S3_BASE_PATH}/gearing/',
         'gender': f's3://{S3_BUCKET}/{S3_BASE_PATH}/gender/',
         'data_source': f's3://{S3_BUCKET}/{S3_BASE_PATH}/data_source/',
         'recipient': f's3://{S3_BUCKET}/{S3_BASE_PATH}/recipient/',
@@ -178,7 +181,7 @@ class DatabaseConnection:
             df_clean = df_clean.replace(['', 'None', 'null', 'NULL'], None)
             
             for col in df_clean.columns:
-                if 'year' in col.lower() or 'id_' in col:
+                if 'year' in col.lower() or 'id_' in col or col == 'last_verified':
                     df_clean[col] = pd.to_numeric(df_clean[col], errors='ignore')
                 elif col in ['double_counting_risk']:
                     # Convert boolean-like columns
@@ -188,8 +191,7 @@ class DatabaseConnection:
                     })
             
             if 'last_verified' in df_clean.columns:
-                df_clean['last_verified'] = pd.to_datetime(df_clean['last_verified'], errors='coerce')
-                df_clean['last_verified'] = df_clean['last_verified'].fillna(pd.Timestamp.now())
+                df_clean['last_verified'] = CURRENT_YEAR
             
             return df_clean
             
@@ -261,6 +263,52 @@ class DatabaseConnection:
             print("Falling back to original insert method")
             return cls._execute_insert_original(table, data)
     
+    # @classmethod
+    # def _execute_insert_original(cls, table: str, data: Dict[str, Any]) -> bool:
+    #     """Fallback to original insert method if awswrangler fails"""
+    #     try:
+    #         print(f"=== USING ORIGINAL INSERT METHOD FOR {table} ===")
+            
+    #         existing_df = cls._read_existing_parquet(table)
+    #         original_count = len(existing_df)
+            
+    #         id_column, next_id = get_next_id_for_table(existing_df, table)
+    #         data_with_id = data.copy()
+    #         data_with_id[id_column] = next_id
+            
+    #         if existing_df.empty:
+    #             for field in ['last_verified', 'created_at']:
+    #                 if field in data_with_id and data_with_id[field] is not None:
+    #                     try:
+    #                         data_with_id[field] = int(float(data_with_id[field]))
+    #                     except (ValueError, TypeError):
+    #                         from config import CURRENT_YEAR
+    #                         data_with_id[field] = CURRENT_YEAR
+                        
+    #             new_df = pd.DataFrame([data_with_id])
+    #         else:
+    #             new_row = {}
+    #             for col in existing_df.columns:
+    #                 new_row[col] = data_with_id.get(col, None)
+                    
+    #             for field in ['last_verified', 'created_at']:
+    #                     if field in new_row and new_row[field] is not None:
+    #                         try:
+    #                             new_row[field] = int(float(new_row[field]))
+    #                         except (ValueError, TypeError):
+    #                             from config import CURRENT_YEAR
+    #                             new_row[field] = CURRENT_YEAR
+                                
+    #             new_row_df = pd.DataFrame([new_row])
+    #             new_df = pd.concat([existing_df, new_row_df], ignore_index=True)
+            
+    #         return cls._write_parquet_file(table, new_df)
+            
+    #     except Exception as e:
+    #         print(f"ORIGINAL INSERT ERROR for {table}: {str(e)}")
+    #         traceback.print_exc()
+    #         return False
+
     @classmethod
     def _execute_insert_original(cls, table: str, data: Dict[str, Any]) -> bool:
         """Fallback to original insert method if awswrangler fails"""
@@ -274,15 +322,52 @@ class DatabaseConnection:
             data_with_id = data.copy()
             data_with_id[id_column] = next_id
             
+            # Debug input data
+            print(f"DEBUG: Input data types before conversion:")
+            for key, value in data_with_id.items():
+                print(f"  {key}: {value} (type: {type(value)})")
+            
             if existing_df.empty:
+                # Apply type conversion for empty DataFrame case
+                for field in ['last_verified', 'created_at']:
+                    if field in data_with_id and data_with_id[field] is not None:
+                        try:
+                            original_value = data_with_id[field]
+                            data_with_id[field] = int(float(data_with_id[field]))
+                            print(f"DEBUG: Converted {field} from {original_value} ({type(original_value)}) to {data_with_id[field]} ({type(data_with_id[field])})")
+                        except (ValueError, TypeError):
+                            from config import CURRENT_YEAR
+                            data_with_id[field] = CURRENT_YEAR
+                            print(f"DEBUG: Set {field} to fallback {CURRENT_YEAR}")
+                
                 new_df = pd.DataFrame([data_with_id])
+                print(f"DEBUG: New DataFrame dtypes (empty case): {new_df.dtypes.to_dict()}")
             else:
+                print(f"DEBUG: Existing DataFrame dtypes: {existing_df.dtypes.to_dict()}")
+                
                 new_row = {}
                 for col in existing_df.columns:
                     new_row[col] = data_with_id.get(col, None)
+                    
+                # Apply type conversion for existing DataFrame case
+                for field in ['last_verified', 'created_at']:
+                    if field in new_row and new_row[field] is not None:
+                        try:
+                            original_value = new_row[field]
+                            new_row[field] = int(float(new_row[field]))
+                            print(f"DEBUG: Converted {field} from {original_value} ({type(original_value)}) to {new_row[field]} ({type(new_row[field])})")
+                        except (ValueError, TypeError):
+                            from config import CURRENT_YEAR
+                            new_row[field] = CURRENT_YEAR
+                            print(f"DEBUG: Set {field} to fallback {CURRENT_YEAR}")
+                                
                 new_row_df = pd.DataFrame([new_row])
+                print(f"DEBUG: New row DataFrame dtypes: {new_row_df.dtypes.to_dict()}")
+                
                 new_df = pd.concat([existing_df, new_row_df], ignore_index=True)
+                print(f"DEBUG: Final DataFrame dtypes after concat: {new_df.dtypes.to_dict()}")
             
+            print(f"DEBUG: About to write parquet with dtypes: {new_df.dtypes.to_dict()}")
             return cls._write_parquet_file(table, new_df)
             
         except Exception as e:
@@ -385,6 +470,15 @@ class DatabaseConnection:
                     new_row = {}
                     for col in existing_df.columns:
                         new_row[col] = data_with_id.get(col, None)
+
+                    for field in ['last_verified', 'created_at']:
+                        if field in new_row and new_row[field] is not None:
+                            try:
+                                new_row[field] = int(float(new_row[field]))
+                            except (ValueError, TypeError):
+                                from config import CURRENT_YEAR
+                                new_row[field] = CURRENT_YEAR
+                    
                     new_rows.append(new_row)
             
             # Concatenate all at once
@@ -447,177 +541,177 @@ class DatabaseConnection:
             cls._connection = None
 
 
-class QueryService:
-    """Query service - delegates to DatabaseConnection - ORIGINAL VERSION"""
+# class QueryService:
+#     """Query service - delegates to DatabaseConnection - ORIGINAL VERSION"""
     
-    @staticmethod
-    def execute_insert(table: str, data: Dict[str, Any]) -> bool:
-        return DatabaseConnection.execute_insert(table, data)
+#     @staticmethod
+#     def execute_insert(table: str, data: Dict[str, Any]) -> bool:
+#         return DatabaseConnection.execute_insert(table, data)
     
-    @staticmethod
-    def bulk_insert(table: str, data_list: List[Dict[str, Any]]) -> bool:
-        return DatabaseConnection.bulk_insert(table, data_list)
+#     @staticmethod
+#     def bulk_insert(table: str, data_list: List[Dict[str, Any]]) -> bool:
+#         return DatabaseConnection.bulk_insert(table, data_list)
     
-    @staticmethod
-    def execute_query(query: str, parameters: Optional[tuple] = None) -> pd.DataFrame:
-        return DatabaseConnection.execute_query(query, parameters)
+#     @staticmethod
+#     def execute_query(query: str, parameters: Optional[tuple] = None) -> pd.DataFrame:
+#         return DatabaseConnection.execute_query(query, parameters)
     
-    @staticmethod
-    def get_table_data(table_name: str, limit: Optional[int] = None) -> pd.DataFrame:
-        return DatabaseConnection.get_table_data(table_name, limit)
+#     @staticmethod
+#     def get_table_data(table_name: str, limit: Optional[int] = None) -> pd.DataFrame:
+#         return DatabaseConnection.get_table_data(table_name, limit)
     
-    @staticmethod
-    def check_table_exists(table_name: str) -> bool:
-        return DatabaseConnection.check_table_exists(table_name)
+#     @staticmethod
+#     def check_table_exists(table_name: str) -> bool:
+#         return DatabaseConnection.check_table_exists(table_name)
     
-    @staticmethod
-    def get_all_institutions() -> pd.DataFrame:
-        """Retrieve all institutions from the database - ORIGINAL VERSION"""
-        query = """
-        SELECT 
-            id_institution,
-            institution_cpi,
-            institution_cpi_short,
-            institution_type_layer1,
-            institution_type_layer2,
-            institution_type_layer3,
-            country_sub,
-            country_parent,
-            last_verified
-        FROM institution
-        ORDER BY institution_cpi
-        """
-        result = DatabaseConnection.execute_query(query)
+#     @staticmethod
+#     def get_all_institutions() -> pd.DataFrame:
+#         """Retrieve all institutions from the database - ORIGINAL VERSION"""
+#         query = """
+#         SELECT 
+#             id_institution,
+#             institution_cpi,
+#             institution_cpi_short,
+#             institution_type_layer1,
+#             institution_type_layer2,
+#             institution_type_layer3,
+#             country_sub,
+#             country_parent,
+#             last_verified
+#         FROM institution
+#         ORDER BY institution_cpi
+#         """
+#         result = DatabaseConnection.execute_query(query)
         
-        if not isinstance(result, pd.DataFrame):
-            if isinstance(result, list):
-                if len(result) > 0:
-                    return pd.DataFrame(result)
-                else:
-                    return pd.DataFrame(columns=[
-                        'id_institution', 'institution_cpi', 'institution_cpi_short',
-                        'institution_type_layer1', 'institution_type_layer2', 'institution_type_layer3',
-                        'country_sub', 'country_parent', 'last_verified'
-                    ])
-            else:
-                return pd.DataFrame(columns=[
-                    'id_institution', 'institution_cpi', 'institution_cpi_short',
-                    'institution_type_layer1', 'institution_type_layer2', 'institution_type_layer3',
-                    'country_sub', 'country_parent', 'last_verified'
-                ])
+#         if not isinstance(result, pd.DataFrame):
+#             if isinstance(result, list):
+#                 if len(result) > 0:
+#                     return pd.DataFrame(result)
+#                 else:
+#                     return pd.DataFrame(columns=[
+#                         'id_institution', 'institution_cpi', 'institution_cpi_short',
+#                         'institution_type_layer1', 'institution_type_layer2', 'institution_type_layer3',
+#                         'country_sub', 'country_parent', 'last_verified'
+#                     ])
+#             else:
+#                 return pd.DataFrame(columns=[
+#                     'id_institution', 'institution_cpi', 'institution_cpi_short',
+#                     'institution_type_layer1', 'institution_type_layer2', 'institution_type_layer3',
+#                     'country_sub', 'country_parent', 'last_verified'
+#                 ])
         
-        return result
+#         return result
     
-    @staticmethod
-    def get_countries() -> pd.DataFrame:
-        """Get all countries from geography table"""
-        query = """
-        SELECT DISTINCT 
-            country_cpi,
-            iso2_code,
-            iso3_code
-        FROM geography
-        ORDER BY country_cpi
-        """
-        return DatabaseConnection.execute_query(query)
+#     @staticmethod
+#     def get_countries() -> pd.DataFrame:
+#         """Get all countries from geography table"""
+#         query = """
+#         SELECT DISTINCT 
+#             country_cpi,
+#             iso2_code,
+#             iso3_code
+#         FROM geography
+#         ORDER BY country_cpi
+#         """
+#         return DatabaseConnection.execute_query(query)
     
-    @staticmethod
-    def get_institution_by_name(name: str) -> Optional[pd.DataFrame]:
-        """Get institution by exact name match"""
-        query = """
-        SELECT * FROM institution
-        WHERE LOWER(institution_cpi) = LOWER(?)
-        """
-        result = DatabaseConnection.execute_query(query, (name,))
-        return result if not result.empty else None
+#     @staticmethod
+#     def get_institution_by_name(name: str) -> Optional[pd.DataFrame]:
+#         """Get institution by exact name match"""
+#         query = """
+#         SELECT * FROM institution
+#         WHERE LOWER(institution_cpi) = LOWER(?)
+#         """
+#         result = DatabaseConnection.execute_query(query, (name,))
+#         return result if not result.empty else None
     
-    @staticmethod
-    def search_institutions_by_prefix(prefix: str, limit: int = 20) -> pd.DataFrame:
-        """Search institutions by name prefix for autocomplete"""
-        query = f"""
-        SELECT 
-            institution_cpi,
-            institution_type_layer1,
-            institution_type_layer2,
-            country_sub
-        FROM institution
-        WHERE LOWER(institution_cpi) LIKE LOWER(?)
-        ORDER BY institution_cpi
-        LIMIT {limit}
-        """
-        search_pattern = f"{prefix}%"
-        return DatabaseConnection.execute_query(query, (search_pattern,))
+#     @staticmethod
+#     def search_institutions_by_prefix(prefix: str, limit: int = 20) -> pd.DataFrame:
+#         """Search institutions by name prefix for autocomplete"""
+#         query = f"""
+#         SELECT 
+#             institution_cpi,
+#             institution_type_layer1,
+#             institution_type_layer2,
+#             country_sub
+#         FROM institution
+#         WHERE LOWER(institution_cpi) LIKE LOWER(?)
+#         ORDER BY institution_cpi
+#         LIMIT {limit}
+#         """
+#         search_pattern = f"{prefix}%"
+#         return DatabaseConnection.execute_query(query, (search_pattern,))
     
-    @staticmethod
-    def check_duplicate_institution(name: str) -> bool:
-        """Check if an institution already exists (case-insensitive)"""
-        query = """
-        SELECT COUNT(*) as count
-        FROM institution
-        WHERE LOWER(institution_cpi) = LOWER(?)
-        """
-        result = DatabaseConnection.execute_query(query, (name,))
-        return result.iloc[0]['count'] > 0 if not result.empty else False
+#     @staticmethod
+#     def check_duplicate_institution(name: str) -> bool:
+#         """Check if an institution already exists (case-insensitive)"""
+#         query = """
+#         SELECT COUNT(*) as count
+#         FROM institution
+#         WHERE LOWER(institution_cpi) = LOWER(?)
+#         """
+#         result = DatabaseConnection.execute_query(query, (name,))
+#         return result.iloc[0]['count'] > 0 if not result.empty else False
     
-    @staticmethod
-    def get_institution_types() -> Dict[str, List[str]]:
-        """Get distinct institution types for dropdowns"""
-        types = {'layer1': [], 'layer2': [], 'layer3': []}
+#     @staticmethod
+#     def get_institution_types() -> Dict[str, List[str]]:
+#         """Get distinct institution types for dropdowns"""
+#         types = {'layer1': [], 'layer2': [], 'layer3': []}
         
-        for layer in ['layer1', 'layer2', 'layer3']:
-            query = f"""
-            SELECT DISTINCT institution_type_{layer}
-            FROM institution
-            WHERE institution_type_{layer} IS NOT NULL
-            ORDER BY institution_type_{layer}
-            """
-            result = DatabaseConnection.execute_query(query)
-            if not result.empty:
-                types[layer] = result[f'institution_type_{layer}'].tolist()
+#         for layer in ['layer1', 'layer2', 'layer3']:
+#             query = f"""
+#             SELECT DISTINCT institution_type_{layer}
+#             FROM institution
+#             WHERE institution_type_{layer} IS NOT NULL
+#             ORDER BY institution_type_{layer}
+#             """
+#             result = DatabaseConnection.execute_query(query)
+#             if not result.empty:
+#                 types[layer] = result[f'institution_type_{layer}'].tolist()
         
-        return types
+#         return types
     
-    @staticmethod
-    def get_unique_values(table_name: str, column_name: str) -> List[str]:
-        """Get unique values from any table column"""
-        query = f"""
-        SELECT DISTINCT {column_name}
-        FROM {table_name}
-        WHERE {column_name} IS NOT NULL
-        ORDER BY {column_name}
-        """
-        result = DatabaseConnection.execute_query(query)
-        return result[column_name].tolist() if not result.empty else []
+#     @staticmethod
+#     def get_unique_values(table_name: str, column_name: str) -> List[str]:
+#         """Get unique values from any table column"""
+#         query = f"""
+#         SELECT DISTINCT {column_name}
+#         FROM {table_name}
+#         WHERE {column_name} IS NOT NULL
+#         ORDER BY {column_name}
+#         """
+#         result = DatabaseConnection.execute_query(query)
+#         return result[column_name].tolist() if not result.empty else []
     
-    @staticmethod
-    def search_table_by_field(table_name: str, field_name: str, search_term: str, limit: int = 20) -> pd.DataFrame:
-        """Search any table by a specific field"""
-        query = f"""
-        SELECT *
-        FROM {table_name}
-        WHERE LOWER({field_name}) LIKE LOWER(?)
-        ORDER BY {field_name}
-        LIMIT {limit}
-        """
-        search_pattern = f"%{search_term}%"
-        return DatabaseConnection.execute_query(query, (search_pattern,))
+#     @staticmethod
+#     def search_table_by_field(table_name: str, field_name: str, search_term: str, limit: int = 20) -> pd.DataFrame:
+#         """Search any table by a specific field"""
+#         query = f"""
+#         SELECT *
+#         FROM {table_name}
+#         WHERE LOWER({field_name}) LIKE LOWER(?)
+#         ORDER BY {field_name}
+#         LIMIT {limit}
+#         """
+#         search_pattern = f"%{search_term}%"
+#         return DatabaseConnection.execute_query(query, (search_pattern,))
     
-    @staticmethod
-    def get_table_count(table_name: str) -> int:
-        """Get row count for any table"""
-        query = f"SELECT COUNT(*) as count FROM {table_name}"
-        result = DatabaseConnection.execute_query(query)
-        return result.iloc[0]['count'] if not result.empty else 0
+#     @staticmethod
+#     def get_table_count(table_name: str) -> int:
+#         """Get row count for any table"""
+#         query = f"SELECT COUNT(*) as count FROM {table_name}"
+#         result = DatabaseConnection.execute_query(query)
+#         return result.iloc[0]['count'] if not result.empty else 0
     
-    @staticmethod
-    def insert_institution(data: Dict[str, Any]) -> bool:
-        """Legacy method for institution insertion"""
-        return DatabaseConnection.execute_insert('institution', data)
+#     @staticmethod
+#     def insert_institution(data: Dict[str, Any]) -> bool:
+#         """Legacy method for institution insertion"""
+#         return DatabaseConnection.execute_insert('institution', data)
     
-    @staticmethod
-    def close_connection():
-        """Close the database connection"""
-        DatabaseConnection.close_connection()
+#     @staticmethod
+#     def close_connection():
+#         """Close the database connection"""
+#         DatabaseConnection.close_connection()
 
 
 @st.cache_resource

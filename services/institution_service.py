@@ -34,7 +34,10 @@ class InstitutionService:
         double_counting_risk: Optional[str] = None,
         contact_info: Optional[str] = None,
         comments: Optional[str] = None,
-        user: str = "system"
+        user: str = "system",
+        last_verified: Optional[int] = None,
+        created_by: Optional[str] = None,
+        created_at: Optional[int] = None
     ) -> Dict[str, Any]:
         """
         Create a new institution with validation and enrichment
@@ -114,7 +117,7 @@ class InstitutionService:
         
         # Prepare data for insertion
         institution_data = {
-            'id_institution': institution_id,
+            'id_institution_cpi': institution_id,
             'institution_cpi': final_name,
             'institution_cpi_short': institution_short,
             'last_verified': CURRENT_YEAR,
@@ -125,7 +128,9 @@ class InstitutionService:
             'country_parent': country_parent,
             'double_counting_risk': double_counting_risk,
             'contact_info': contact_info,
-            'comments': comments
+            'comments': comments,
+            'created_at': CURRENT_YEAR,
+            'created_by': user
         }
         
         # Remove None values
@@ -205,7 +210,10 @@ class InstitutionService:
                     double_counting_risk=row.get('double_counting_risk'),
                     contact_info=row.get('contact_info'),
                     comments=row.get('comments'),
-                    user=user
+                    user=user,
+                    last_verified=row.get('last_verified'),
+                    created_by=row.get('created_by') or user,
+                    created_at=CURRENT_YEAR
                 )
                 
                 if creation_result['success']:
