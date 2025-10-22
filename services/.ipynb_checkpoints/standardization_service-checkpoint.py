@@ -203,13 +203,19 @@ class StandardizationService:
                 next_id = int(max_id) + 1 if pd.notna(max_id) else 1
                 print(f"DEBUG: Calculated next ID: {next_id}")
             
-            # Create mapping data
+            # Create mapping data - EXACTLY like other tables
+            from config import CURRENT_YEAR
             mapping_data = {
                 id_column: next_id,
                 'institution_original': TextProcessor.normalize_institution_name(original_name),
                 'institution_cpi': standardized_name,
-                'reference': reference
+                'reference': reference,
+                'created_at': CURRENT_YEAR,     # Add audit fields like other tables
+                'created_by': 'analyst'         # Add audit fields like other tables
             }
+            
+            # Remove None values EXACTLY like other tables
+            mapping_data = {k: v for k, v in mapping_data.items() if v is not None}
             
             print(f"DEBUG: Mapping data to insert: {mapping_data}")
             
@@ -265,12 +271,18 @@ class StandardizationService:
                 next_id = int(max_id) + 1 if pd.notna(max_id) else 1
                 print(f"DEBUG: Calculated next geography ID: {next_id}")
             
-            # Create mapping data
+            # Create mapping data - EXACTLY like other tables
+            from config import CURRENT_YEAR
             mapping_data = {
                 id_column: next_id,
                 'country_original': TextProcessor.normalize_institution_name(original_name),
-                'country_cpi': standardized_name
+                'country_cpi': standardized_name,
+                'created_at': CURRENT_YEAR,     # Add audit fields like other tables
+                'created_by': 'analyst'         # Add audit fields like other tables
             }
+            
+            # Remove None values EXACTLY like other tables
+            mapping_data = {k: v for k, v in mapping_data.items() if v is not None}
             
             print(f"DEBUG: Geography mapping data to insert: {mapping_data}")
             
