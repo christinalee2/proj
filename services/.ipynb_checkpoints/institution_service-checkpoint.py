@@ -40,7 +40,7 @@ class InstitutionService:
         created_at: Optional[int] = None
     ) -> Dict[str, Any]:
         """
-        Create a new institution with validation and enrichment - important to ensure types match parquet
+        Create a new institution with validation and enrichment - important to ensure types match parquet file
         
         Args:
             institution_name: Name of the institution

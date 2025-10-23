@@ -25,11 +25,11 @@ class InstitutionLookupResult:
 
 class InstitutionLookupService:
     """
-    Automated institution data lookup using:
-    1. Comprehensive suffix-based public/private detection
-    2. Serper.dev API for Google search
-    3. OpenAI to extract structured data
-    4. Institution table country matching
+    Institution lookup follows pattern:
+    1. Suffix-based public/private detection (from suffix list in ref tables)
+    2. Serper.dev API for Google search - can change but seems to work better for me than Google api
+    3. OpenAI to extract structured data 
+    4. Institution table country matching - trying to get this to the exact name like United States of America rather than United States
     """
     
     PUBLIC_SUFFIXES = {
@@ -144,15 +144,7 @@ class InstitutionLookupService:
             print(f"Loaded {len(self.valid_countries)} valid countries from institution table")
     
     def detect_government_entity(self, institution_name: str) -> bool:
-        """
-        Check if institution name suggests government/public sector entity
-        
-        Args:
-            institution_name: Full institution name
-            
-        Returns:
-            True if appears to be government entity
-        """
+
         name_lower = institution_name.lower()
         
         for indicator in self.GOVERNMENT_INDICATORS:
@@ -163,7 +155,7 @@ class InstitutionLookupService:
     
     def detect_public_private_from_suffix(self, institution_name: str) -> Optional[str]:
         """
-        Detect if institution is Public or Private based on legal suffix
+        Detects if institution is Public or Private based on just suffix
         
         Args:
             institution_name: Full institution name
@@ -213,13 +205,13 @@ class InstitutionLookupService:
     
     def match_country_to_institution_table(self, country_name: str) -> Optional[str]:
         """
-        Match a country name to valid institution table country entries
+        Matches a country name to valid institution table country entries. ISO mappings to help with abbreviations in search results
         
         Args:
             country_name: Country name to match
             
         Returns:
-            Matched country name from institution table, or original
+            Matched country name from institution table, or original if none found
         """
         if not self.valid_countries or not country_name:
             return country_name
@@ -275,7 +267,7 @@ class InstitutionLookupService:
         return country_name
     
     def search_trusted_sources(self, institution_name: str) -> List[Dict[str, str]]:
-        """Search for institution info using Serper.dev API"""
+        """Search for institution info using Serper.dev API, falls back to a google search if not, but not that helpful"""
     
         if not self.serper_api_key:
             print("ERROR: Serper API key not configured")
@@ -361,7 +353,7 @@ class InstitutionLookupService:
         search_results: List[Dict[str, str]],
         suffix_detected_type1: Optional[str] = None
     ) -> InstitutionLookupResult:
-        """Use LLM to extract structured institution data"""
+        """Use Openai to extract structured institution data"""
         if not self.openai_client:
             return self._create_empty_result(institution_name, "OpenAI API key not configured")
         
@@ -441,7 +433,6 @@ Return JSON:
             data = json.loads(content)
             
             # Override with suffix detection if LLM returned null
-            # Get values
             type1 = data.get('institution_type_layer1')
             type2 = data.get('institution_type_layer2')
             type3 = data.get('institution_type_layer3')
@@ -503,7 +494,7 @@ Snippet: {result['snippet']}
         return "\n".join(context_parts)
     
     def _create_empty_result(self, institution_name: str, reason: str) -> InstitutionLookupResult:
-        """Create empty result when lookup fails"""
+        """If lookup fails for some reason, returns empty"""
         return InstitutionLookupResult(
             institution_name=institution_name,
             institution_type_layer1=None,
