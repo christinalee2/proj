@@ -25,7 +25,7 @@ class NZFTMatcher:
     """Handles NZFT institution matching logic"""
     
     def __init__(self):
-        self.target_column = 'institution_cpi'  # Make this configurable
+        self.target_column = 'institution_cpi'  # Make this configurable, so you can change the column you want to match to
         self.suffix_patterns = [
             r'\s+(llc|ltd|limited|inc|incorporated|corp|corporation)\.?$',
             r'\s+(gmbh|sarl|srl|pvt|pty|pte|bv|nv|ag|sa|sas|ab)\.?$',
@@ -82,14 +82,12 @@ class NZFTMatcher:
             return fuzzy_matches
         
         try:
-            # Get fitted matcher
             matcher = get_fitted_matcher(institution_df, threshold=0.70)  # Lower threshold for more matches
             
             for idx, input_name in enumerate(input_names):
                 if idx in exclude_exact or not input_name:
                     continue
                 
-                # Get fuzzy matches
                 matches = matcher.find_similar_institutions(
                     query=input_name,
                     institution_df=institution_df,
@@ -98,10 +96,8 @@ class NZFTMatcher:
                 )
                 
                 if matches:
-                    # Add country information
                     enhanced_matches = []
                     for name, score in matches:
-                        # Find country info for this institution
                         country = ""
                         matching_row = institution_df[institution_df['institution_cpi'] == name]
                         if not matching_row.empty:
@@ -123,13 +119,10 @@ class NZFTMatcher:
         
         input_names = df[self.target_column].fillna('').astype(str).tolist()
         
-        # Find exact matches
         exact_matches = self.find_exact_matches(input_names, institution_df)
         
-        # Find fuzzy matches for non-exact entries
         fuzzy_matches = self.find_fuzzy_matches(input_names, institution_df, exact_matches)
         
-        # Create match results
         results = []
         for idx, name in enumerate(input_names):
             if idx in exact_matches:
@@ -164,7 +157,6 @@ def render_nzft_page():
     st.markdown("Upload a file with institutions to match against the database")
     st.markdown("---")
     
-    # Initialize session state
     if 'nzft_uploaded_df' not in st.session_state:
         st.session_state['nzft_uploaded_df'] = None
     if 'nzft_match_results' not in st.session_state:
@@ -176,7 +168,6 @@ def render_nzft_page():
     
     matcher = NZFTMatcher()
     
-    # Configuration section
     with st.expander("Configuration"):
         target_column = st.text_input(
             "Target Column Name",
@@ -185,7 +176,6 @@ def render_nzft_page():
         )
         matcher.target_column = target_column
     
-    # File upload
     st.subheader("1. Upload File")
     uploaded_file = st.file_uploader(
         "Choose CSV or Excel file with institutions to match",
@@ -194,7 +184,6 @@ def render_nzft_page():
     )
     
     if uploaded_file is not None:
-        # Parse file
         if st.session_state['nzft_uploaded_df'] is None or uploaded_file.name != st.session_state.get('nzft_last_file'):
             with st.spinner("Loading file..."):
                 try:
@@ -205,7 +194,6 @@ def render_nzft_page():
                     
                     df.columns = df.columns.str.strip()
                     
-                    # Validate target column exists
                     if matcher.target_column not in df.columns:
                         st.error(f"Column '{matcher.target_column}' not found. Available columns: {', '.join(df.columns)}")
                         return
@@ -222,12 +210,10 @@ def render_nzft_page():
         
         df = st.session_state['nzft_uploaded_df']
         
-        # Show file preview
         st.subheader("File Preview")
         st.dataframe(df.head(10), use_container_width=True)
         st.info(f"Loaded {len(df)} rows with {len(df.columns)} columns")
         
-        # Process matches
         if st.session_state['nzft_match_results'] is None:
             with st.spinner("Finding matches in institution database..."):
                 try:
@@ -235,7 +221,6 @@ def render_nzft_page():
                     match_results = matcher.process_upload(df, institution_df)
                     st.session_state['nzft_match_results'] = match_results
                     
-                    # Initialize exact confirmations for all exact matches
                     for result in match_results:
                         if result.match_type == 'exact':
                             st.session_state['nzft_exact_confirmations'][result.row_index] = result.exact_match
@@ -246,12 +231,10 @@ def render_nzft_page():
         
         match_results = st.session_state['nzft_match_results']
         
-        # Separate results by type
         exact_results = [r for r in match_results if r.match_type == 'exact']
         fuzzy_results = [r for r in match_results if r.match_type == 'fuzzy']
         no_match_results = [r for r in match_results if r.match_type == 'none']
         
-        # Summary
         st.markdown("---")
         st.subheader("2. Matching Results")
         
@@ -265,13 +248,11 @@ def render_nzft_page():
         with col4:
             st.metric("No Matches", len(no_match_results))
         
-        # Exact matches section
         if exact_results:
             st.markdown("---")
             with st.expander(f"Exact Matches ({len(exact_results)}) - Automatically kept"):
                 st.info("These institutions were found as exact matches (including suffix variations) and will be automatically included in the results")
                 
-                # Create a dataframe for exact matches
                 exact_data = []
                 for result in exact_results:
                     exact_data.append({
@@ -282,7 +263,6 @@ def render_nzft_page():
                 exact_df = pd.DataFrame(exact_data)
                 st.dataframe(exact_df, use_container_width=True, hide_index=True)
         
-        # Fuzzy matches section
         if fuzzy_results:
             st.markdown("---")
             st.subheader("Fuzzy Matches")
@@ -295,7 +275,6 @@ def render_nzft_page():
                     if result.fuzzy_matches:
                         st.markdown("**Potential matches:**")
                         
-                        # Create radio button options
                         options = ["No match"]
                         option_values = [None]
                         
@@ -305,7 +284,6 @@ def render_nzft_page():
                             options.append(option_text)
                             option_values.append(name)
                         
-                        # Get current selection
                         current_selection = st.session_state['nzft_user_selections'].get(result.row_index)
                         try:
                             default_index = option_values.index(current_selection) if current_selection in option_values else 0
@@ -320,7 +298,6 @@ def render_nzft_page():
                             label_visibility="collapsed"
                         )
                         
-                        # Store selection
                         selected_value = option_values[options.index(selected_option)]
                         st.session_state['nzft_user_selections'][result.row_index] = selected_value
                     
@@ -329,30 +306,24 @@ def render_nzft_page():
                     
                     st.markdown("---")
         
-        # No matches section
         if no_match_results:
             with st.expander(f"No Matches Found ({len(no_match_results)})"):
                 for result in no_match_results:
                     st.text(f"• {result.original_name}")
         
-        # Finish and download section
         st.markdown("---")
         st.subheader("3. Generate Results")
         
         if st.button("Finish Matching", type="primary", use_container_width=True):
-            # Generate final results
             final_df = generate_final_results(df, match_results, matcher.target_column)
             st.session_state['nzft_final_df'] = final_df
             
-            # Show preview
             st.subheader("Final Results Preview")
             st.dataframe(final_df, use_container_width=True)
             
-            # Summary of matches
             matched_count = (final_df['match'] != '').sum()
             st.success(f"Processing complete! {matched_count} out of {len(final_df)} institutions matched.")
             
-            # Download button
             csv_buffer = io.StringIO()
             final_df.to_csv(csv_buffer, index=False)
             
@@ -367,29 +338,23 @@ def render_nzft_page():
 
 def generate_final_results(original_df: pd.DataFrame, match_results: List[MatchResult], target_column: str) -> pd.DataFrame:
     """Generate final DataFrame with match column"""
-    # Create a copy of the original DataFrame
     final_df = original_df.copy()
     
-    # Find the position to insert the match column (right after target column)
     target_col_index = final_df.columns.get_loc(target_column)
     
-    # Create match values
     match_values = [''] * len(final_df)
     
     for result in match_results:
         if result.match_type == 'exact' and result.exact_match:
-            # Use exact match from session state confirmations
             confirmed_match = st.session_state['nzft_exact_confirmations'].get(result.row_index)
             if confirmed_match:
                 match_values[result.row_index] = confirmed_match
         
         elif result.match_type == 'fuzzy':
-            # Use user selection from session state
             selected_match = st.session_state['nzft_user_selections'].get(result.row_index)
             if selected_match:
                 match_values[result.row_index] = selected_match
     
-    # Insert the match column right after the target column
     final_df.insert(target_col_index + 1, 'match', match_values)
     
     return final_df

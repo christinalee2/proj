@@ -12,7 +12,7 @@ class FuzzyMatcher:
 
     def __init__(self, threshold: float = 0.85):
         """
-        Initializes fuzzy matcher
+        Sets up fuzzy matcher - should first do vectorized rough fuzzy matching, narrow down to top matches then run cpi_tools fuzzy match for finer matching
         
         Args:
             threshold: threshold matches should reach to be output
@@ -66,7 +66,7 @@ class FuzzyMatcher:
             query: Institution name to search for
             institution_df: institution_cpi df table
             limit: Final number of results to return
-            tfidf_top_k: Number of candidates to get from tf-idf before cpi tools 
+            tfidf_top_k: Number of candidates to get from tf-idf before running cpi tools 
             
         Output:
             List of tuples (institution_name, similarity_score)
@@ -136,42 +136,6 @@ class FuzzyMatcher:
             ]
             return tfidf_matches
     
-    def batch_match(
-        self,
-        queries: List[str],
-        institution_df: pd.DataFrame
-    ) -> pd.DataFrame:
-        """
-        Batch match multiple queries efficiently
-        
-        Args:
-            queries: List of institution names
-            institution_df: df with institutions (institution_cpi)
-            
-        Output:
-            df with match results
-        """
-        results = []
-        
-        for query in queries:
-            matches = self.find_similar_institutions(query, institution_df, limit=1)
-            
-            if matches:
-                best_match, score = matches[0]
-                is_dup = score >= self.threshold
-            else:
-                best_match, score = None, 0.0
-                is_dup = False
-            
-            results.append({
-                'query': query,
-                'best_match': best_match,
-                'score': score,
-                'is_duplicate': is_dup
-            })
-        
-        return pd.DataFrame(results)
-
 
 @st.cache_resource(ttl=600)
 def get_fitted_matcher(institution_df: pd.DataFrame, threshold: float = 0.85) -> FuzzyMatcher:

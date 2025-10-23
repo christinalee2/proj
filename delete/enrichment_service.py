@@ -137,28 +137,7 @@ class EnrichmentService:
         except Exception as e:
             print(f"Error in GPT enrichment: {e}")
             return {}
-    
-    def batch_suggest_metadata(
-        self,
-        institution_names: List[str]
-    ) -> List[Dict[str, Optional[str]]]:
-        """
-        Suggest metadata for multiple institutions
-        
-        Args:
-            institution_names: List of institution names
-            
-        Returns:
-            List of suggestion dictionaries
-        """
-        suggestions = []
-        
-        for name in institution_names:
-            suggestion = self.suggest_institution_metadata(name)
-            suggestion['institution_name'] = name
-            suggestions.append(suggestion)
-        
-        return suggestions
+
     
     def get_research_links(self, institution_name: str) -> List[Dict[str, str]]:
         """

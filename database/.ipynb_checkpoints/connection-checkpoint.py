@@ -18,7 +18,7 @@ except ImportError:
 
 
 def get_next_id_for_table(existing_df, table_name):
-    """Simple function to get the next ID for a table - ORIGINAL VERSION"""
+    """Get id that's one greater than the current id, finds id column automatically, need to update if things change"""
     
     id_column = None
     if not existing_df.empty:
@@ -51,7 +51,8 @@ class DatabaseConnection:
     
     S3_BUCKET = os.getenv('S3_BUCKET', 'cpi-uk-us-datascience-stage')
     S3_BASE_PATH = 'auxiliary-data/reference-data/reference-db'
-    
+
+    #Hardcoding in options for table locations, update to add more tables
     TABLE_FILES = {
         'institution': f'{S3_BASE_PATH}/institution/data.parquet',
         'geography': f'{S3_BASE_PATH}/geography/data.parquet',
@@ -174,7 +175,7 @@ class DatabaseConnection:
     
     @classmethod
     def _clean_dataframe_for_insert(cls, df: pd.DataFrame) -> pd.DataFrame:
-        """Clean DataFrame for insertion"""
+        """Clean DataFrame for insertion, makes sure they match expected int formats"""
         try:
             df_clean = df.copy()
             
@@ -211,7 +212,7 @@ class DatabaseConnection:
     
     @classmethod
     def _execute_insert_awswrangler(cls, table: str, data: Dict[str, Any]) -> bool:
-        """Insert using awswrangler - NO file rewriting"""
+        """Insert using awswrangler - need to set up fully, right now it's always falling back to the original version but that seems to work well so have been keeping as is"""
         try:
             print(f"=== STARTING AWSWRANGLER INSERT FOR {table} ===")
             
@@ -263,52 +264,6 @@ class DatabaseConnection:
             print("Falling back to original insert method")
             return cls._execute_insert_original(table, data)
     
-    # @classmethod
-    # def _execute_insert_original(cls, table: str, data: Dict[str, Any]) -> bool:
-    #     """Fallback to original insert method if awswrangler fails"""
-    #     try:
-    #         print(f"=== USING ORIGINAL INSERT METHOD FOR {table} ===")
-            
-    #         existing_df = cls._read_existing_parquet(table)
-    #         original_count = len(existing_df)
-            
-    #         id_column, next_id = get_next_id_for_table(existing_df, table)
-    #         data_with_id = data.copy()
-    #         data_with_id[id_column] = next_id
-            
-    #         if existing_df.empty:
-    #             for field in ['last_verified', 'created_at']:
-    #                 if field in data_with_id and data_with_id[field] is not None:
-    #                     try:
-    #                         data_with_id[field] = int(float(data_with_id[field]))
-    #                     except (ValueError, TypeError):
-    #                         from config import CURRENT_YEAR
-    #                         data_with_id[field] = CURRENT_YEAR
-                        
-    #             new_df = pd.DataFrame([data_with_id])
-    #         else:
-    #             new_row = {}
-    #             for col in existing_df.columns:
-    #                 new_row[col] = data_with_id.get(col, None)
-                    
-    #             for field in ['last_verified', 'created_at']:
-    #                     if field in new_row and new_row[field] is not None:
-    #                         try:
-    #                             new_row[field] = int(float(new_row[field]))
-    #                         except (ValueError, TypeError):
-    #                             from config import CURRENT_YEAR
-    #                             new_row[field] = CURRENT_YEAR
-                                
-    #             new_row_df = pd.DataFrame([new_row])
-    #             new_df = pd.concat([existing_df, new_row_df], ignore_index=True)
-            
-    #         return cls._write_parquet_file(table, new_df)
-            
-    #     except Exception as e:
-    #         print(f"ORIGINAL INSERT ERROR for {table}: {str(e)}")
-    #         traceback.print_exc()
-    #         return False
-
     @classmethod
     def _execute_insert_original(cls, table: str, data: Dict[str, Any]) -> bool:
         """Fallback to original insert method if awswrangler fails"""
@@ -321,29 +276,24 @@ class DatabaseConnection:
             id_column, next_id = get_next_id_for_table(existing_df, table)
             data_with_id = data.copy()
             data_with_id[id_column] = next_id
-            
-            # Debug input data
-            print(f"DEBUG: Input data types before conversion:")
+
             for key, value in data_with_id.items():
                 print(f"  {key}: {value} (type: {type(value)})")
             
             if existing_df.empty:
-                # Apply type conversion for empty DataFrame case
                 for field in ['last_verified', 'created_at']:
                     if field in data_with_id and data_with_id[field] is not None:
                         try:
                             original_value = data_with_id[field]
                             data_with_id[field] = int(float(data_with_id[field]))
-                            print(f"DEBUG: Converted {field} from {original_value} ({type(original_value)}) to {data_with_id[field]} ({type(data_with_id[field])})")
+                            
                         except (ValueError, TypeError):
                             from config import CURRENT_YEAR
                             data_with_id[field] = CURRENT_YEAR
-                            print(f"DEBUG: Set {field} to fallback {CURRENT_YEAR}")
+                            
                 
                 new_df = pd.DataFrame([data_with_id])
-                print(f"DEBUG: New DataFrame dtypes (empty case): {new_df.dtypes.to_dict()}")
             else:
-                print(f"DEBUG: Existing DataFrame dtypes: {existing_df.dtypes.to_dict()}")
                 
                 new_row = {}
                 for col in existing_df.columns:
@@ -355,19 +305,14 @@ class DatabaseConnection:
                         try:
                             original_value = new_row[field]
                             new_row[field] = int(float(new_row[field]))
-                            print(f"DEBUG: Converted {field} from {original_value} ({type(original_value)}) to {new_row[field]} ({type(new_row[field])})")
                         except (ValueError, TypeError):
                             from config import CURRENT_YEAR
                             new_row[field] = CURRENT_YEAR
-                            print(f"DEBUG: Set {field} to fallback {CURRENT_YEAR}")
                                 
                 new_row_df = pd.DataFrame([new_row])
-                print(f"DEBUG: New row DataFrame dtypes: {new_row_df.dtypes.to_dict()}")
                 
                 new_df = pd.concat([existing_df, new_row_df], ignore_index=True)
-                print(f"DEBUG: Final DataFrame dtypes after concat: {new_df.dtypes.to_dict()}")
             
-            print(f"DEBUG: About to write parquet with dtypes: {new_df.dtypes.to_dict()}")
             return cls._write_parquet_file(table, new_df)
             
         except Exception as e:
@@ -392,18 +337,15 @@ class DatabaseConnection:
             
             print(f"=== STARTING AWSWRANGLER BULK INSERT FOR {table} ({len(data_list)} rows) ===")
             
-            # Get existing data to determine starting ID
             existing_data = cls.get_table_data(table, limit=None)
             id_column, next_id = get_next_id_for_table(existing_data, table)
             
-            # Add sequential IDs
             records_with_ids = []
             for i, record in enumerate(data_list):
                 record_with_id = record.copy()
                 record_with_id[id_column] = next_id + i
                 records_with_ids.append(record_with_id)
             
-            # Create DataFrame
             df_to_insert = pd.DataFrame(records_with_ids)
             df_cleaned = cls._clean_dataframe_for_insert(df_to_insert)
             
@@ -411,12 +353,10 @@ class DatabaseConnection:
                 print("No valid data to insert after cleaning")
                 return False
             
-            # Get S3 path
             s3_path = cls.TABLE_LOCATIONS.get(table)
             if not s3_path:
                 raise ValueError(f"No S3 location configured for table: {table}")
             
-            # Use awswrangler to append
             wr.s3.to_parquet(
                 df=df_cleaned,
                 path=s3_path,
@@ -451,14 +391,11 @@ class DatabaseConnection:
                 
             print(f"=== USING ORIGINAL BULK INSERT FOR {table} ({len(data_list)} rows) ===")
             
-            # Read existing data ONCE
             existing_df = cls._read_existing_parquet(table)
             original_count = len(existing_df)
             
-            # Get starting ID
             id_column, next_id = get_next_id_for_table(existing_df, table)
             
-            # Create all new rows at once
             new_rows = []
             for i, data in enumerate(data_list):
                 data_with_id = data.copy()
@@ -481,14 +418,12 @@ class DatabaseConnection:
                     
                     new_rows.append(new_row)
             
-            # Concatenate all at once
             if existing_df.empty:
                 new_df = pd.DataFrame(new_rows)
             else:
                 new_rows_df = pd.DataFrame(new_rows)
                 new_df = pd.concat([existing_df, new_rows_df], ignore_index=True)
             
-            # Single write operation
             success = cls._write_parquet_file(table, new_df)
             
             if success:
@@ -503,7 +438,7 @@ class DatabaseConnection:
     
     @classmethod
     def _write_parquet_file(cls, table_name: str, df: pd.DataFrame) -> bool:
-        """Write the complete DataFrame back to the S3 parquet file - ORIGINAL VERSION"""
+        """Write the complete DataFrame back to the S3 parquet file"""
         if table_name not in cls.TABLE_FILES:
             raise ValueError(f"Unknown table: {table_name}")
         
@@ -540,178 +475,6 @@ class DatabaseConnection:
             cls._connection.close()
             cls._connection = None
 
-
-# class QueryService:
-#     """Query service - delegates to DatabaseConnection - ORIGINAL VERSION"""
-    
-#     @staticmethod
-#     def execute_insert(table: str, data: Dict[str, Any]) -> bool:
-#         return DatabaseConnection.execute_insert(table, data)
-    
-#     @staticmethod
-#     def bulk_insert(table: str, data_list: List[Dict[str, Any]]) -> bool:
-#         return DatabaseConnection.bulk_insert(table, data_list)
-    
-#     @staticmethod
-#     def execute_query(query: str, parameters: Optional[tuple] = None) -> pd.DataFrame:
-#         return DatabaseConnection.execute_query(query, parameters)
-    
-#     @staticmethod
-#     def get_table_data(table_name: str, limit: Optional[int] = None) -> pd.DataFrame:
-#         return DatabaseConnection.get_table_data(table_name, limit)
-    
-#     @staticmethod
-#     def check_table_exists(table_name: str) -> bool:
-#         return DatabaseConnection.check_table_exists(table_name)
-    
-#     @staticmethod
-#     def get_all_institutions() -> pd.DataFrame:
-#         """Retrieve all institutions from the database - ORIGINAL VERSION"""
-#         query = """
-#         SELECT 
-#             id_institution,
-#             institution_cpi,
-#             institution_cpi_short,
-#             institution_type_layer1,
-#             institution_type_layer2,
-#             institution_type_layer3,
-#             country_sub,
-#             country_parent,
-#             last_verified
-#         FROM institution
-#         ORDER BY institution_cpi
-#         """
-#         result = DatabaseConnection.execute_query(query)
-        
-#         if not isinstance(result, pd.DataFrame):
-#             if isinstance(result, list):
-#                 if len(result) > 0:
-#                     return pd.DataFrame(result)
-#                 else:
-#                     return pd.DataFrame(columns=[
-#                         'id_institution', 'institution_cpi', 'institution_cpi_short',
-#                         'institution_type_layer1', 'institution_type_layer2', 'institution_type_layer3',
-#                         'country_sub', 'country_parent', 'last_verified'
-#                     ])
-#             else:
-#                 return pd.DataFrame(columns=[
-#                     'id_institution', 'institution_cpi', 'institution_cpi_short',
-#                     'institution_type_layer1', 'institution_type_layer2', 'institution_type_layer3',
-#                     'country_sub', 'country_parent', 'last_verified'
-#                 ])
-        
-#         return result
-    
-#     @staticmethod
-#     def get_countries() -> pd.DataFrame:
-#         """Get all countries from geography table"""
-#         query = """
-#         SELECT DISTINCT 
-#             country_cpi,
-#             iso2_code,
-#             iso3_code
-#         FROM geography
-#         ORDER BY country_cpi
-#         """
-#         return DatabaseConnection.execute_query(query)
-    
-#     @staticmethod
-#     def get_institution_by_name(name: str) -> Optional[pd.DataFrame]:
-#         """Get institution by exact name match"""
-#         query = """
-#         SELECT * FROM institution
-#         WHERE LOWER(institution_cpi) = LOWER(?)
-#         """
-#         result = DatabaseConnection.execute_query(query, (name,))
-#         return result if not result.empty else None
-    
-#     @staticmethod
-#     def search_institutions_by_prefix(prefix: str, limit: int = 20) -> pd.DataFrame:
-#         """Search institutions by name prefix for autocomplete"""
-#         query = f"""
-#         SELECT 
-#             institution_cpi,
-#             institution_type_layer1,
-#             institution_type_layer2,
-#             country_sub
-#         FROM institution
-#         WHERE LOWER(institution_cpi) LIKE LOWER(?)
-#         ORDER BY institution_cpi
-#         LIMIT {limit}
-#         """
-#         search_pattern = f"{prefix}%"
-#         return DatabaseConnection.execute_query(query, (search_pattern,))
-    
-#     @staticmethod
-#     def check_duplicate_institution(name: str) -> bool:
-#         """Check if an institution already exists (case-insensitive)"""
-#         query = """
-#         SELECT COUNT(*) as count
-#         FROM institution
-#         WHERE LOWER(institution_cpi) = LOWER(?)
-#         """
-#         result = DatabaseConnection.execute_query(query, (name,))
-#         return result.iloc[0]['count'] > 0 if not result.empty else False
-    
-#     @staticmethod
-#     def get_institution_types() -> Dict[str, List[str]]:
-#         """Get distinct institution types for dropdowns"""
-#         types = {'layer1': [], 'layer2': [], 'layer3': []}
-        
-#         for layer in ['layer1', 'layer2', 'layer3']:
-#             query = f"""
-#             SELECT DISTINCT institution_type_{layer}
-#             FROM institution
-#             WHERE institution_type_{layer} IS NOT NULL
-#             ORDER BY institution_type_{layer}
-#             """
-#             result = DatabaseConnection.execute_query(query)
-#             if not result.empty:
-#                 types[layer] = result[f'institution_type_{layer}'].tolist()
-        
-#         return types
-    
-#     @staticmethod
-#     def get_unique_values(table_name: str, column_name: str) -> List[str]:
-#         """Get unique values from any table column"""
-#         query = f"""
-#         SELECT DISTINCT {column_name}
-#         FROM {table_name}
-#         WHERE {column_name} IS NOT NULL
-#         ORDER BY {column_name}
-#         """
-#         result = DatabaseConnection.execute_query(query)
-#         return result[column_name].tolist() if not result.empty else []
-    
-#     @staticmethod
-#     def search_table_by_field(table_name: str, field_name: str, search_term: str, limit: int = 20) -> pd.DataFrame:
-#         """Search any table by a specific field"""
-#         query = f"""
-#         SELECT *
-#         FROM {table_name}
-#         WHERE LOWER({field_name}) LIKE LOWER(?)
-#         ORDER BY {field_name}
-#         LIMIT {limit}
-#         """
-#         search_pattern = f"%{search_term}%"
-#         return DatabaseConnection.execute_query(query, (search_pattern,))
-    
-#     @staticmethod
-#     def get_table_count(table_name: str) -> int:
-#         """Get row count for any table"""
-#         query = f"SELECT COUNT(*) as count FROM {table_name}"
-#         result = DatabaseConnection.execute_query(query)
-#         return result.iloc[0]['count'] if not result.empty else 0
-    
-#     @staticmethod
-#     def insert_institution(data: Dict[str, Any]) -> bool:
-#         """Legacy method for institution insertion"""
-#         return DatabaseConnection.execute_insert('institution', data)
-    
-#     @staticmethod
-#     def close_connection():
-#         """Close the database connection"""
-#         DatabaseConnection.close_connection()
 
 
 @st.cache_resource

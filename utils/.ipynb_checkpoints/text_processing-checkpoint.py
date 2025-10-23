@@ -5,7 +5,7 @@ import pandas as pd
 
 
 class TextProcessor:
-    """Handles text normalization and processing"""
+    """General functions for text normalization"""
     
     @staticmethod
     def normalize_institution_name(name: str) -> str:
@@ -28,7 +28,7 @@ class TextProcessor:
         name = re.sub(r'\s+', ' ', name)
         
         # Remove special characters that might cause issues
-        # Keep alphanumeric, spaces, hyphens, and common business punctuation
+        # Keep alphanumeric, spaces, hyphens
         name = re.sub(r'[^\w\s\-.,&()\']', '', name)
         
         return name
@@ -36,7 +36,7 @@ class TextProcessor:
     @staticmethod
     def remove_accents(text: str) -> str:
         """
-        Remove accents and diacritical marks from text
+        Remove accents and diacritical marks
         
         Args:
             text: Input text
@@ -47,22 +47,19 @@ class TextProcessor:
         if not text:
             return ""
         
-        # Normalize to NFD (decomposed form)
         nfd = unicodedata.normalize('NFD', text)
         
-        # Filter out combining characters (accents)
         without_accents = ''.join(
             char for char in nfd
             if unicodedata.category(char) != 'Mn'
         )
         
-        # Normalize back to NFC (composed form)
         return unicodedata.normalize('NFC', without_accents)
     
     @staticmethod
     def extract_suffix(institution_name: str) -> Optional[str]:
         """
-        Extract common business suffix from institution name to try to match without
+        Extract common business suffixes from institution name to try to match without (i.e. 123Venture should match to 123Venture SA), can add to this list as needed
         
         Args:
             institution_name: Full institution name
@@ -88,36 +85,11 @@ class TextProcessor:
         
         return None
     
-    @staticmethod
-    def extract_keywords(institution_name: str) -> list:
-        """
-        Extract keywords from institution name for matching
-        
-        Args:
-            institution_name: Full institution name
-            
-        Output:
-            List of keywords
-        """
-        # Remove common business suffixes and articles
-        name = institution_name.lower()
-        
-        # Remove punctuation
-        name = re.sub(r'[^\w\s]', ' ', name)
-        
-        # Split into words
-        words = name.split()
-        
-        # Remove common stop words
-        stop_words = {'the', 'a', 'an', 'and', 'or', 'of', 'at', 'by', 'for', 'in', 'on', 'to'}
-        keywords = [w for w in words if w not in stop_words and len(w) > 2]
-        
-        return keywords
     
     @staticmethod
     def generate_short_name(institution_name: str, max_length: int = 50) -> str:
         """
-        Generate a shortened version of institution name
+        Generate a shortened version of institution name, maybe we don't need this? just some general shortening/acronym production
         
         Args:
             institution_name: Full institution name
@@ -146,31 +118,7 @@ class TextProcessor:
             if 3 <= len(acronym) <= 10:
                 return acronym
         
-        # Last resort: truncate with ellipsis
+
         return institution_name[:max_length-3] + "..."
     
-    @staticmethod
-    def clean_csv_value(value: str) -> str:
-        """
-        Clean a value from CSV input
-        
-        Args:
-            value: Raw CSV value
-            
-        Output:
-            Cleaned value
-        """
-        if pd.isna(value) or value is None:
-            return ""
-        
-        # Convert to string and strip whitespace
-        value = str(value).strip()
-        
-        # Remove quotes if present
-        if value.startswith('"') and value.endswith('"'):
-            value = value[1:-1]
-        if value.startswith("'") and value.endswith("'"):
-            value = value[1:-1]
-        
-        return value
 

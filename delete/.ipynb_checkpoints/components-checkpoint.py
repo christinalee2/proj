@@ -86,51 +86,51 @@ def show_research_links(links: List[Dict[str, str]]):
             st.markdown(f"[{link['title']}]({link['url']})", unsafe_allow_html=True)
 
 
-def show_bulk_upload_preview(df: pd.DataFrame, validation_df: Optional[pd.DataFrame] = None):
-    """
-    Display a preview of bulk upload data with validation status
+# def show_bulk_upload_preview(df: pd.DataFrame, validation_df: Optional[pd.DataFrame] = None):
+#     """
+#     Display a preview of bulk upload data with validation status
     
-    Args:
-        df: Original DataFrame
-        validation_df: DataFrame with validation results
-    """
-    st.subheader("Upload Preview")
+#     Args:
+#         df: Original DataFrame
+#         validation_df: DataFrame with validation results
+#     """
+#     st.subheader("Upload Preview")
     
-    if validation_df is not None:
-        # Show summary statistics
-        col1, col2, col3, col4 = st.columns(4)
+#     if validation_df is not None:
+#         # Show summary statistics
+#         col1, col2, col3, col4 = st.columns(4)
         
-        with col1:
-            total = len(validation_df)
-            st.metric("Total Rows", total)
+#         with col1:
+#             total = len(validation_df)
+#             st.metric("Total Rows", total)
         
-        with col2:
-            valid = len(validation_df[validation_df['status'] == 'OK'])
-            st.metric("Valid", valid, delta=None if valid == 0 else "✓")
+#         with col2:
+#             valid = len(validation_df[validation_df['status'] == 'OK'])
+#             st.metric("Valid", valid, delta=None if valid == 0 else "✓")
         
-        with col3:
-            warnings = len(validation_df[validation_df['status'] == 'WARNING'])
-            st.metric("Warnings", warnings, delta=None if warnings == 0 else "⚠")
+#         with col3:
+#             warnings = len(validation_df[validation_df['status'] == 'WARNING'])
+#             st.metric("Warnings", warnings, delta=None if warnings == 0 else "⚠")
         
-        with col4:
-            errors = len(validation_df[validation_df['status'] == 'ERROR']) + \
-                    len(validation_df[validation_df['status'] == 'DUPLICATE'])
-            st.metric("Errors", errors, delta=None if errors == 0 else "✗")
+#         with col4:
+#             errors = len(validation_df[validation_df['status'] == 'ERROR']) + \
+#                     len(validation_df[validation_df['status'] == 'DUPLICATE'])
+#             st.metric("Errors", errors, delta=None if errors == 0 else "✗")
         
-        # Show detailed table with color coding
-        def highlight_status(row):
-            if row['status'] == 'OK':
-                return ['background-color: #d4edda'] * len(row)
-            elif row['status'] == 'WARNING':
-                return ['background-color: #fff3cd'] * len(row)
-            elif row['status'] in ['ERROR', 'DUPLICATE']:
-                return ['background-color: #f8d7da'] * len(row)
-            return [''] * len(row)
+#         # Show detailed table with color coding
+#         def highlight_status(row):
+#             if row['status'] == 'OK':
+#                 return ['background-color: #d4edda'] * len(row)
+#             elif row['status'] == 'WARNING':
+#                 return ['background-color: #fff3cd'] * len(row)
+#             elif row['status'] in ['ERROR', 'DUPLICATE']:
+#                 return ['background-color: #f8d7da'] * len(row)
+#             return [''] * len(row)
         
-        styled_df = validation_df.style.apply(highlight_status, axis=1)
-        st.dataframe(styled_df, use_container_width=True, height=400)
-    else:
-        st.dataframe(df, use_container_width=True, height=400)
+#         styled_df = validation_df.style.apply(highlight_status, axis=1)
+#         st.dataframe(styled_df, use_container_width=True, height=400)
+#     else:
+#         st.dataframe(df, use_container_width=True, height=400)
 
 
 def show_audit_history(audit_df: pd.DataFrame):
@@ -200,53 +200,53 @@ def create_autocomplete_input(
     return value
 
 
-def show_success_message(message: str, details: Optional[Dict[str, Any]] = None):
-    """
-    Show a success message with optional details
+# def show_success_message(message: str, details: Optional[Dict[str, Any]] = None):
+#     """
+#     Show a success message with optional details
     
-    Args:
-        message: Success message
-        details: Optional dictionary with additional details
-    """
-    st.success(message)
+#     Args:
+#         message: Success message
+#         details: Optional dictionary with additional details
+#     """
+#     st.success(message)
     
-    if details:
-        with st.expander("View Details"):
-            st.json(details)
+#     if details:
+#         with st.expander("View Details"):
+#             st.json(details)
 
 
-def show_error_message(message: str, error: Optional[Exception] = None):
-    """
-    Show an error message with optional exception details
+# def show_error_message(message: str, error: Optional[Exception] = None):
+#     """
+#     Show an error message with optional exception details
     
-    Args:
-        message: Error message
-        error: Optional exception object
-    """
-    st.error(message)
+#     Args:
+#         message: Error message
+#         error: Optional exception object
+#     """
+#     st.error(message)
     
-    if error:
-        with st.expander("Error Details"):
-            st.code(str(error))
+#     if error:
+#         with st.expander("Error Details"):
+#             st.code(str(error))
 
 
-def create_confirmation_dialog(message: str, key: str) -> bool:
-    """
-    Create a confirmation dialog
+# def create_confirmation_dialog(message: str, key: str) -> bool:
+#     """
+#     Create a confirmation dialog
     
-    Args:
-        message: Confirmation message
-        key: Unique key for the widget
+#     Args:
+#         message: Confirmation message
+#         key: Unique key for the widget
         
-    Returns:
-        True if confirmed, False otherwise
-    """
-    st.warning(message)
-    col1, col2 = st.columns(2)
+#     Returns:
+#         True if confirmed, False otherwise
+#     """
+#     st.warning(message)
+#     col1, col2 = st.columns(2)
     
-    with col1:
-        confirm = st.button("✓ Confirm", key=f"{key}_confirm", type="primary")
-    with col2:
-        cancel = st.button("✗ Cancel", key=f"{key}_cancel")
+#     with col1:
+#         confirm = st.button("✓ Confirm", key=f"{key}_confirm", type="primary")
+#     with col2:
+#         cancel = st.button("✗ Cancel", key=f"{key}_cancel")
     
-    return confirm
+#     return confirm

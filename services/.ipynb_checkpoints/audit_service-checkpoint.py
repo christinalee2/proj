@@ -7,7 +7,7 @@ from config import CURRENT_YEAR
 
 
 class AuditService:
-    """Handles audit logging for all data changes"""
+    """Handles audit logging (created_at created_by) for other services"""
     
     def __init__(self):
         self.query_service = QueryService()
@@ -19,14 +19,12 @@ class AuditService:
         data: Dict[str, Any],
         user: str = "system"
     ) -> bool:
-        """
-        Log an INSERT operation
-        
+        """ 
         Args:
             table_name: Name of the table
             record_id: ID of the inserted record
             data: Dictionary of inserted data
-            user: User who performed the operation
+            user: User who performed the operation (from sidebar entry)
             
         Returns:
             True if successful, False otherwise
@@ -104,7 +102,7 @@ class AuditService:
         user: str = "system"
     ) -> bool:
         """
-        Log multiple INSERT operations from bulk upload
+        Log multiple operations from bulk upload
         
         Args:
             table_name: Name of the table

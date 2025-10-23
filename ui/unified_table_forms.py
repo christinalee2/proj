@@ -133,38 +133,6 @@ def get_table_dropdown_options(table_name: str, config: TableConfig) -> Dict[str
         return options
 
 
-# def ensure_proper_data_types(data: Dict[str, Any]) -> Dict[str, Any]:
-#     """
-#     Ensure proper data types for database insertion, particularly for integer fields
-#     that can cause Parquet schema conflicts
-#     """
-#     from config import CURRENT_YEAR
-    
-#     data_copy = data.copy()
-    
-#     # Fields that should always be integers
-#     integer_fields = ['last_verified', 'created_at', 'year_added']
-#     # Also handle any field with 'year' in the name or starting with 'id_'
-#     for field_name in data_copy.keys():
-#         if 'year' in field_name.lower() or field_name.startswith('id_') or field_name in integer_fields:
-#             value = data_copy[field_name]
-#             try:
-#                 if value is None or value == '' or str(value).strip() == '':
-#                     if field_name in ['last_verified', 'created_at'] or 'year' in field_name.lower():
-#                         data_copy[field_name] = int(CURRENT_YEAR)
-#                     else:
-#                         data_copy[field_name] = None
-#                 else:
-#                     # Convert to int, handling both string and float inputs
-#                     data_copy[field_name] = int(float(str(value).strip()))
-#             except (ValueError, TypeError):
-#                 if field_name in ['last_verified', 'created_at'] or 'year' in field_name.lower():
-#                     data_copy[field_name] = int(CURRENT_YEAR)
-#                 else:
-#                     data_copy[field_name] = None
-    
-#     return data_copy
-
 def auto_populate_data(data: Dict[str, Any], username: str) -> Dict[str, Any]:
     """
     Auto-populate year fields and audit fields for any table entry
@@ -221,38 +189,33 @@ def create_table_entry(table_name: str, data: Dict[str, Any], user: str = "syste
             if not config:
                 return {'success': False, 'message': f'No configuration for table {table_name}'}
             
-            # Create clean data structure EXACTLY like InstitutionService
             clean_data = {}
             
-            # Add form data (only non-None, non-empty values)
             for field_config in config.fields:
                 field_name = field_config.name
                 if field_name in data and data[field_name] is not None and str(data[field_name]).strip() != '':
                     clean_data[field_name] = data[field_name]
             
-            # EXACTLY like institution service - set these as integers
             clean_data['created_at'] = CURRENT_YEAR     # Explicit integer like institution service
             clean_data['created_by'] = user             # Explicit string like institution service
 
             year_fields = ['last_verified', 'year', 'year_added', 'year_of_analysis']
             for year_field in year_fields:
                 if any(field.name == year_field for field in config.fields):
-                    clean_data[year_field] = CURRENT_YEAR  # Set the year field for this table
+                    clean_data[year_field] = CURRENT_YEAR  
 
             integer_fields = ['m49_code', 'iso_numeric_code']
             for field in integer_fields:
                 if field in clean_data:
                     value = clean_data[field]
-                    # Check if value is empty, None, or whitespace
                     if value is None or str(value).strip() == '':
-                        clean_data[field] = None  # Explicitly set to None for empty values
+                        clean_data[field] = None  
                     else:
                         try:
                             clean_data[field] = int(float(str(value).strip()))
                         except (ValueError, TypeError):
                             clean_data[field] = None
             
-            # Remove None values EXACTLY like institution service does
             clean_data = {k: v for k, v in clean_data.items() if v is not None}
             
             query_service = QueryService()
@@ -274,28 +237,7 @@ def create_table_entry(table_name: str, data: Dict[str, Any], user: str = "syste
                 'success': False,
                 'message': f'Error creating entry: {str(e)}'
             }
-        # try:
-        #     clean_data = {k: v for k, v in data.items() if v is not None and str(v).strip() != ''}
-            
-        #     query_service = QueryService()
-        #     success = query_service.execute_insert(table_name, clean_data)
-            
-        #     if success:
-        #         return {
-        #             'success': True,
-        #             'entry_id': clean_data.get(list(clean_data.keys())[0]),  # Use first field as ID
-        #             'message': 'Entry created successfully'
-        #         }
-        #     else:
-        #         return {
-        #             'success': False,
-        #             'message': 'Failed to insert into database'
-        #         }
-        # except Exception as e:
-        #     return {
-        #         'success': False,
-        #         'message': f'Error creating entry: {str(e)}'
-        #     }
+
 
 
 def render_form_field(field_config, dropdown_options: Dict[str, List[str]], key_suffix: str) -> Any:
@@ -372,7 +314,6 @@ def render_form_field(field_config, dropdown_options: Dict[str, List[str]], key_
         )
     
     else:
-        # Fallback to text input
         return st.text_input(
             field_config.display_name,
             value=default_value,
@@ -390,7 +331,6 @@ def render_unified_single_entry_form(table_name: str):
         st.error(f"No configuration found for table: {table_name}")
         return
         
-    # Clear cache if needed from previous operation
     if st.session_state.get('_cache_needs_clear', False):
         st.cache_data.clear()
         st.session_state['_cache_needs_clear'] = False
@@ -399,18 +339,14 @@ def render_unified_single_entry_form(table_name: str):
     st.markdown(config.description)
     st.markdown("---")
     
-    # Load existing data and dropdown options
     existing_data = get_table_data_cached(table_name, limit=None)
     dropdown_options = get_table_dropdown_options(table_name, config)
     
-    # Get the primary field (first required field)
     primary_field = config.required_fields[0] if config.required_fields else config.fields[0].name
     primary_field_config = next((f for f in config.fields if f.name == primary_field), None)
     
-    # Initialize standardization service
     standardization_service = StandardizationService()
     
-    # Primary field input with real-time checking
     if primary_field_config:
         primary_value = st.text_input(
             primary_field_config.display_name,
@@ -419,27 +355,22 @@ def render_unified_single_entry_form(table_name: str):
             key=f"{table_name}_primary"
         )
         
-        # Show duplicate checking results if value entered
         if primary_value and len(str(primary_value).strip()) >= 3:
             
-            # Exact duplicate warning
             exact = check_exact_duplicate(primary_value, existing_data, primary_field)
             if exact:
                 st.warning(f"'{exact}' already exists in the {config.display_name.lower()} table.")
             
-            # Fuzzy matches with Keep functionality
             try:
                 fuzzy = check_fuzzy_matches(primary_value, existing_data, primary_field)
                 if fuzzy:
                     st.info(f"Found {len(fuzzy)} similar {config.display_name.lower()}(s)")
                     st.caption("Similar entries found. Click 'Keep' to use your entry and create a standardization mapping.")
                     
-                    # Show fuzzy matches with inline Keep buttons
                     for i, (name, score) in enumerate(fuzzy):
                         col1, col2 = st.columns([4, 1])
                         
                         with col1:
-                            # Show match details including country if available
                             details = []
                             try:
                                 match_row = existing_data[existing_data[primary_field] == name]
@@ -456,7 +387,6 @@ def render_unified_single_entry_form(table_name: str):
                         
                         with col2:
                             if st.button("Keep", key=f"keep_{table_name}_{i}", help=f"Use '{primary_value}' and map to '{name}'"):
-                                # Process keep action
                                 if table_name == 'institution':
                                     result = standardization_service.process_keep_institution(primary_value, name)
                                 elif table_name == 'geography':
@@ -484,7 +414,6 @@ def render_unified_single_entry_form(table_name: str):
                     try:
                         from services.institution_lookup_service import InstitutionLookupService
                         
-                        # Get valid countries
                         valid_countries = set()
                         if not existing_data.empty:
                             if 'country_sub' in existing_data.columns:
@@ -495,7 +424,6 @@ def render_unified_single_entry_form(table_name: str):
                         lookup_service = InstitutionLookupService(valid_countries=list(valid_countries))
                         result = lookup_service.lookup_institution(primary_value)
                         
-                        # Store lookup result in session state for use in form
                         st.session_state['lookup_result'] = result
                         st.session_state['lookup_used'] = False
                         st.rerun()
@@ -503,12 +431,10 @@ def render_unified_single_entry_form(table_name: str):
                     except Exception as e:
                         st.error(f"Lookup failed: {str(e)}")
     
-    # Display lookup results if available (institution only)
     if table_name == 'institution' and st.session_state.get('lookup_result') and not st.session_state.get('lookup_used', False):
         lookup_result = st.session_state['lookup_result']
         confidence = lookup_result.confidence_score
         
-        # Color code by confidence
         if confidence >= 0.9:
             st.success(f"High confidence data found ({confidence * 100:.0f}%)")
         elif confidence >= 0.7:
@@ -516,7 +442,6 @@ def render_unified_single_entry_form(table_name: str):
         else:
             st.warning(f"Low confidence data found ({confidence * 100:.0f}%) - Please verify")
         
-        # Show found data
         col1, col2 = st.columns(2)
         
         with col1:
@@ -593,7 +518,6 @@ def render_unified_single_entry_form(table_name: str):
     
     with col1:
         if st.button(f"Add {config.display_name}", type="primary", use_container_width=True):
-            # Validate required fields
             missing_required = []
             for field_name in config.required_fields:
                 if not form_data.get(field_name) or str(form_data[field_name]).strip() == '':
@@ -612,10 +536,8 @@ def render_unified_single_entry_form(table_name: str):
                     
                     if result['success']:
                         st.success(f"{config.display_name} created successfully!")
-                        # Defer cache clear to next interaction
                         st.session_state[f'_cache_needs_clear'] = True
                         
-                        # Clear lookup data if institution
                         if table_name == 'institution':
                             st.session_state.pop('lookup_result', None)
                             st.session_state.pop('lookup_used', None)
@@ -629,7 +551,6 @@ def render_unified_single_entry_form(table_name: str):
     
     with col2:
         if st.button("Reset Form", use_container_width=True):
-            # Clear lookup data if institution
             if table_name == 'institution':
                 for key in ['lookup_result', 'lookup_used', 'prefill_type1', 'prefill_type2', 'prefill_type3', 'prefill_parent', 'prefill_sub']:
                     st.session_state.pop(key, None)
@@ -649,16 +570,13 @@ def render_unified_bulk_upload(table_name: str):
     st.subheader(f"Bulk Upload to {config.display_name} Table")
     st.markdown(config.description)
     
-    # Initialize session state
     session_key = f'bulk_upload_{table_name}'
     init_bulk_upload_session_state(session_key)
     
-    # Template download
     render_template_download(table_name, config)
     
     st.markdown("---")
     
-    # File upload
     uploaded_file = st.file_uploader(
         "Choose CSV or Excel file",
         type=['csv', 'xlsx', 'xls'],
@@ -666,15 +584,12 @@ def render_unified_bulk_upload(table_name: str):
     )
     
     if uploaded_file is not None:
-        # Parse and validate file
         df = process_uploaded_file(uploaded_file, config, session_key)
         
         if df is not None:
-            # Run validation with duplicate checking
             validation_results = run_bulk_validation(df, table_name, config, session_key)
             
             if validation_results:
-                # Render enhanced bulk upload interface
                 render_enhanced_bulk_upload_grid(validation_results, config, session_key, table_name)
 
 
@@ -729,7 +644,6 @@ def render_enhanced_bulk_upload_grid(validation_results: List[ValidationResult],
     
     st.subheader(f"Review & Edit Records ({visible_count} rows)")
     
-    # Batch actions
     col1, col2, col3 = st.columns(3)
     with col1:
         if st.button("Auto-Lookup All Missing Data", use_container_width=True):
@@ -753,7 +667,6 @@ def render_enhanced_bulk_upload_grid(validation_results: List[ValidationResult],
     rows_to_show_fuzzy = [r for r in fuzzy_results if st.session_state[f'{session_key}_user_decisions'].get(r.row_index) != 'skip']
     rows_to_show_valid = [r for r in valid_results if st.session_state[f'{session_key}_user_decisions'].get(r.row_index) != 'skip']
     
-    # Combine: fuzzy matches at top, then valid
     all_to_display = rows_to_show_fuzzy + rows_to_show_valid
     
     total_rows = len(all_to_display)
@@ -779,7 +692,6 @@ def render_enhanced_bulk_upload_grid(validation_results: List[ValidationResult],
     else:
         paginated_rows = all_to_display
     
-    # Render data rows with enhanced fuzzy match handling
     for result in paginated_rows:
         render_enhanced_grid_row(result, config, session_key, table_name)
     
@@ -811,31 +723,26 @@ def render_enhanced_grid_header(config: TableConfig):
     </style>
     """, unsafe_allow_html=True)
     
-    # Determine which fields to show in the grid (limit to main category fields for display)
     main_fields = [f for f in config.fields if f.category == 'main' and f.name not in ['created_by', 'created_at']]
     
-    # Always include the primary field first
     primary_field = next((f for f in config.fields if f.name in config.required_fields), config.fields[0])
     if primary_field not in main_fields:
         main_fields.insert(0, primary_field)
-    
-    # Limit to 6 fields for display + lookup button + action button
+
+    #Limited to 6 fields for now, may need to change later if some forms need more than that, but will make ui clunky
     display_fields = main_fields[:6]
     
-    # Dynamic column layout based on number of fields
     if len(display_fields) <= 3:
-        col_widths = [3] + [2] * len(display_fields) + [1, 0.5]  # Wider columns for fewer fields
+        col_widths = [3] + [2] * len(display_fields) + [1, 0.5]  
     else:
-        col_widths = [2] + [1.5] * len(display_fields) + [0.5, 0.3]  # Standard layout
+        col_widths = [2] + [1.5] * len(display_fields) + [0.5, 0.3]  
     
     cols = st.columns(col_widths)
     
-    # Render headers dynamically
     for i, field in enumerate(display_fields):
         with cols[i]:
             st.markdown(f"**{field.display_name}**")
     
-    # Lookup and action columns
     with cols[len(display_fields)]:
         st.markdown("**Lookup**")
     with cols[len(display_fields) + 1]:
@@ -845,7 +752,6 @@ def render_enhanced_grid_header(config: TableConfig):
 def render_enhanced_grid_row(result: ValidationResult, config: TableConfig, session_key: str, table_name: str):
     """Enhanced grid row with slim blue info box for fuzzy matches"""
     
-    # Get edited data for this row
     if f'{session_key}_edited_data' not in st.session_state:
         st.session_state[f'{session_key}_edited_data'] = {}
     
@@ -862,12 +768,10 @@ def render_enhanced_grid_row(result: ValidationResult, config: TableConfig, sess
         if is_fuzzy_match:
             col1, col2 = st.columns([4, 1])
             with col1:
-                # Create comma-separated match list with percentages
                 matches_text = ', '.join([f'{name} ({score*100:.0f}%)' for name, score in result.fuzzy_matches[:3]])
                 st.info(f"**Similar institutions found:** {matches_text}")
             with col2:
                 if st.button("Match", key=f"match_btn_{result.row_index}", help="Select which institution to map to"):
-                    # Show dropdown when Match button is clicked
                     st.session_state[f'show_match_dropdown_{result.row_index}'] = True
                     st.rerun()
         
@@ -884,21 +788,17 @@ def render_enhanced_grid_row(result: ValidationResult, config: TableConfig, sess
             
             with col_confirm:
                 if st.button("Confirm", key=f"confirm_match_{result.row_index}", type="primary"):
-                    # Extract the institution name from the selected option
                     selected_match_name = selected_match.split(' (')[0]  # Remove the percentage part
                     user_input = row_data.get(config.required_fields[0] if config.required_fields else config.fields[0].name, '')
                     
-                    # Store mapping for deferred processing instead of processing immediately
                     st.session_state[f'{session_key}_pending_mappings'][result.row_index] = {
                         'user_input': user_input,
                         'matched_name': selected_match_name,
                         'table_type': 'institution' if table_name == 'institution' else 'geography'
                     }
                     
-                    # Remove this row from upload (mark as skip)
                     st.session_state[f'{session_key}_user_decisions'][result.row_index] = 'skip'
                     
-                    # Clean up dropdown state
                     st.session_state[f'show_match_dropdown_{result.row_index}'] = False
                     
                     st.success(f"Mapping queued: {user_input} → {selected_match_name}")
@@ -909,10 +809,8 @@ def render_enhanced_grid_row(result: ValidationResult, config: TableConfig, sess
                     st.session_state[f'show_match_dropdown_{result.row_index}'] = False
                     st.rerun()
         
-        # Dynamic column layout based on table configuration
         main_fields = [f for f in config.fields if f.category == 'main' and f.name not in ['created_by', 'created_at']]
         
-        # Always include the primary field first
         primary_field = next((f for f in config.fields if f.name in config.required_fields), config.fields[0])
         if primary_field not in main_fields:
             main_fields.insert(0, primary_field)
@@ -920,11 +818,10 @@ def render_enhanced_grid_row(result: ValidationResult, config: TableConfig, sess
         # Limit to 6 fields for display + lookup button + action button
         display_fields = main_fields[:6]
         
-        # Dynamic column layout based on number of fields
         if len(display_fields) <= 3:
-            col_widths = [3] + [2] * len(display_fields) + [1, 0.5]  # Wider columns for fewer fields
+            col_widths = [3] + [2] * len(display_fields) + [1, 0.5] 
         else:
-            col_widths = [2] + [1.5] * len(display_fields) + [0.5, 0.3]  # Standard layout
+            col_widths = [2] + [1.5] * len(display_fields) + [0.5, 0.3]  
         
         cols = st.columns(col_widths)
         
@@ -939,12 +836,11 @@ def render_enhanced_grid_row(result: ValidationResult, config: TableConfig, sess
             st.markdown(f"<div class='institution-name'>{name_display}</div>", unsafe_allow_html=True)
         
         # Render the other fields dynamically
-        for i, field in enumerate(display_fields[1:], 1):  # Skip the first field (already shown)
-            if i < len(cols) - 2:  # Leave space for lookup and action columns
+        for i, field in enumerate(display_fields[1:], 1): 
+            if i < len(cols) - 2:  
                 with cols[i]:
                     current_value = row_data.get(field.name, '')
                     
-                    # Handle special institution lookup integration for institution fields
                     if table_name == 'institution' and lookup_result:
                         if field.name == 'institution_type_layer1' and hasattr(lookup_result, 'institution_type_layer1'):
                             current_value = current_value or lookup_result.institution_type_layer1 or ''
@@ -1000,13 +896,11 @@ def render_enhanced_grid_row(result: ValidationResult, config: TableConfig, sess
                             st.session_state[f'{session_key}_edited_data'][result.row_index][field.name] = new_val
                     
                     else:
-                        # For other field types, show as text
                         st.text(current_value or '')
         
         # Lookup button
         lookup_col_index = len(display_fields) if len(display_fields) < len(cols) - 1 else len(cols) - 2
         with cols[lookup_col_index]:
-            # Lookup button (only for institution table)
             if table_name == 'institution':
                 if st.button("🔍", key=f"lookup_btn_{result.row_index}_{session_key}", help="Auto-lookup"):
                     run_single_lookup(result, table_name, session_key)
@@ -1160,7 +1054,6 @@ def run_bulk_validation(df: pd.DataFrame, table_name: str, config: TableConfig, 
             for idx, row in df.iterrows():
                 row_data = row.to_dict()
                 
-                # Validate this row
                 result = validate_bulk_row(row_data, idx, existing_data, primary_field, config)
                 validation_results.append(result)
             
@@ -1224,122 +1117,6 @@ def validate_bulk_row(row_data: Dict, row_index: int, existing_data: pd.DataFram
     )
 
 
-# def render_excel_grid_header(config: TableConfig):
-#     """Render Excel-style grid header"""
-#     st.markdown("""
-#     <style>
-#     .institution-name {
-#         font-size: 15px;
-#         color: #000000;
-#         font-weight: 500;
-#         padding: 8px 0;
-#     }
-#     </style>
-#     """, unsafe_allow_html=True)
-    
-#     # Create columns based on table fields - show first 6 fields + lookup + actions
-#     primary_field = config.required_fields[0] if config.required_fields else config.fields[0].name
-#     display_fields = [f for f in config.fields if f.name == primary_field][:1]  # Primary field
-#     other_fields = [f for f in config.fields if f.field_type == 'select' and f.name != primary_field][:5]  # Up to 5 select fields
-#     display_fields.extend(other_fields)
-    
-#     col_widths = [2] + [1.5] * min(len(other_fields), 5) + [0.5, 0.3]  # Primary + others + lookup + discard
-#     cols = st.columns(col_widths)
-    
-#     with cols[0]:
-#         st.markdown(f"**{display_fields[0].display_name}**")
-    
-#     for i, field in enumerate(other_fields[:5], 1):
-#         if i < len(cols) - 2:  # Leave space for lookup and discard
-#             with cols[i]:
-#                 st.markdown(f"**{field.display_name}**")
-    
-#     with cols[-2]:
-#         st.markdown("**Lookup**")
-#     with cols[-1]:
-#         st.markdown("")
-
-
-# def render_excel_grid_row(result: ValidationResult, config: TableConfig, session_key: str, table_name: str):
-#     """Render a single row in Excel-style grid with inline editing"""
-    
-#     # Get edited data for this row
-#     if f'{session_key}_edited_data' not in st.session_state:
-#         st.session_state[f'{session_key}_edited_data'] = {}
-    
-#     if result.row_index not in st.session_state[f'{session_key}_edited_data']:
-#         st.session_state[f'{session_key}_edited_data'][result.row_index] = result.data.copy()
-    
-#     row_data = st.session_state[f'{session_key}_edited_data'][result.row_index]
-    
-#     container = st.container()
-#     with container:
-#         # Main editable row
-#         primary_field = config.required_fields[0] if config.required_fields else config.fields[0].name
-#         display_fields = [f for f in config.fields if f.name == primary_field][:1]  # Primary field
-#         other_fields = [f for f in config.fields if f.field_type == 'select' and f.name != primary_field][:5]  # Select fields
-#         display_fields.extend(other_fields)
-        
-#         col_widths = [2] + [1.5] * min(len(other_fields), 5) + [0.5, 0.3]
-#         cols = st.columns(col_widths)
-        
-#         # Get dropdown options for this table
-#         dropdown_options = get_table_dropdown_options(table_name, config)
-        
-#         # Check for lookup data
-#         lookup_result = st.session_state.get(f'{session_key}_lookup_results', {}).get(result.row_index)
-        
-#         with cols[0]:
-#             # Primary field (non-editable, just display)
-#             st.markdown(f"<div class='institution-name'>{row_data.get(primary_field, '')}</div>", unsafe_allow_html=True)
-        
-#         # Render editable select fields
-#         for i, field in enumerate(other_fields[:5], 1):
-#             if i < len(cols) - 2:
-#                 with cols[i]:
-#                     # Get current value
-#                     current_value = row_data.get(field.name, '')
-                    
-#                     # Use lookup result if available and current value is empty
-#                     if not current_value and lookup_result:
-#                         if field.name == 'institution_type_layer1' and hasattr(lookup_result, 'institution_type_layer1'):
-#                             current_value = lookup_result.institution_type_layer1 or ''
-#                         elif field.name == 'institution_type_layer2' and hasattr(lookup_result, 'institution_type_layer2'):
-#                             current_value = lookup_result.institution_type_layer2 or ''
-#                         elif field.name == 'institution_type_layer3' and hasattr(lookup_result, 'institution_type_layer3'):
-#                             current_value = lookup_result.institution_type_layer3 or ''
-#                         elif field.name == 'country_sub' and hasattr(lookup_result, 'subsidiary_country'):
-#                             current_value = lookup_result.subsidiary_country or ''
-#                         elif field.name == 'country_parent' and hasattr(lookup_result, 'parent_country'):
-#                             current_value = lookup_result.parent_country or ''
-                    
-#                     # Get options for this field
-#                     options = dropdown_options.get(field.name, [''])
-#                     idx = options.index(current_value) if current_value in options else 0
-                    
-#                     # Render selectbox
-#                     new_value = st.selectbox(
-#                         field.name,
-#                         options,
-#                         index=idx,
-#                         key=f"{field.name}_{result.row_index}_{session_key}",
-#                         label_visibility="collapsed"
-#                     )
-                    
-#                     # Update edited data if changed
-#                     if new_value != row_data.get(field.name):
-#                         st.session_state[f'{session_key}_edited_data'][result.row_index][field.name] = new_value
-        
-#         with cols[-2]:
-#             if st.button("🔍", key=f"lookup_btn_{result.row_index}_{session_key}", help="Auto-lookup"):
-#                 run_single_lookup(result, table_name, session_key)
-        
-#         with cols[-1]:
-#             if st.button("✕", key=f"discard_row_{result.row_index}_{session_key}", help="Remove this row"):
-#                 st.session_state[f'{session_key}_user_decisions'][result.row_index] = 'skip'
-#                 st.rerun()
-        
-#         st.markdown("---")
 
 
 def run_single_lookup(result: ValidationResult, table_name: str, session_key: str):
@@ -1355,7 +1132,6 @@ def run_single_lookup(result: ValidationResult, table_name: str, session_key: st
         try:
             from services.institution_lookup_service import InstitutionLookupService
             
-            # Get valid countries
             existing_data = get_table_data_cached('institution', limit=None)
             valid_countries = set()
             if not existing_data.empty:
@@ -1367,19 +1143,16 @@ def run_single_lookup(result: ValidationResult, table_name: str, session_key: st
             lookup_service = InstitutionLookupService(valid_countries=list(valid_countries))
             lookup_result = lookup_service.lookup_institution(institution_name)
             
-            # Store lookup result
             if f'{session_key}_lookup_results' not in st.session_state:
                 st.session_state[f'{session_key}_lookup_results'] = {}
             st.session_state[f'{session_key}_lookup_results'][result.row_index] = lookup_result
             
-            # Auto-apply if high confidence
             if lookup_result.confidence_score >= 0.75:
                 if f'{session_key}_edited_data' not in st.session_state:
                     st.session_state[f'{session_key}_edited_data'] = {}
                 
                 edited_data = st.session_state[f'{session_key}_edited_data'].get(result.row_index, result.data.copy())
                 
-                # Update with lookup results
                 if lookup_result.institution_type_layer1:
                     edited_data['institution_type_layer1'] = lookup_result.institution_type_layer1
                 if lookup_result.institution_type_layer2:
@@ -1406,7 +1179,6 @@ def run_batch_lookup(results: List[ValidationResult], table_name: str, session_k
         st.info("Auto-lookup is only available for institution table")
         return
     
-    # Filter for records that need lookup and are set to insert
     missing_data_results = [
         r for r in results 
         if (not st.session_state.get(f'{session_key}_edited_data', {}).get(r.row_index, {}).get('institution_type_layer1') or 
@@ -1423,7 +1195,6 @@ def run_batch_lookup(results: List[ValidationResult], table_name: str, session_k
     try:
         from services.institution_lookup_service import InstitutionLookupService
         
-        # Initialize lookup service
         existing_data = get_table_data_cached('institution', limit=None)
         valid_countries = set()
         if not existing_data.empty:
@@ -1437,7 +1208,6 @@ def run_batch_lookup(results: List[ValidationResult], table_name: str, session_k
         progress_bar = st.progress(0)
         status_text = st.empty()
         
-        # Initialize session state
         if f'{session_key}_lookup_results' not in st.session_state:
             st.session_state[f'{session_key}_lookup_results'] = {}
         if f'{session_key}_edited_data' not in st.session_state:
@@ -1454,7 +1224,6 @@ def run_batch_lookup(results: List[ValidationResult], table_name: str, session_k
                 if lookup_result.confidence_score >= 0.75:
                     edited_data = st.session_state[f'{session_key}_edited_data'].get(result.row_index, result.data.copy())
                     
-                    # Update with lookup results
                     if lookup_result.institution_type_layer1:
                         edited_data['institution_type_layer1'] = lookup_result.institution_type_layer1
                     if lookup_result.institution_type_layer2:
@@ -1535,11 +1304,9 @@ def execute_unified_bulk_insert(validation_results: List[ValidationResult], conf
                 try:
                     data_to_insert = st.session_state.get(f'{session_key}_edited_data', {}).get(result.row_index, result.data)
 
-                    # EXACTLY like institution service - set as integers
                     data_to_insert['created_by'] = st.session_state.get('username', 'analyst')
-                    data_to_insert['created_at'] = CURRENT_YEAR      # Integer like institution service
+                    data_to_insert['created_at'] = CURRENT_YEAR     
                     
-                    # Handle year field variations - each table has only one of these
                     from table_configs import get_table_config
                     config = get_table_config(table_name)
                     if config:
@@ -1552,16 +1319,14 @@ def execute_unified_bulk_insert(validation_results: List[ValidationResult], conf
                     for field in integer_fields:
                         if field in data_to_insert:
                             value = data_to_insert[field]
-                            # Check if value is empty, None, or whitespace
                             if value is None or str(value).strip() == '':
-                                data_to_insert[field] = None  # Explicitly set to None for empty values
+                                data_to_insert[field] = None  
                             else:
                                 try:
                                     data_to_insert[field] = int(float(str(value).strip()))
                                 except (ValueError, TypeError):
                                     data_to_insert[field] = None
                     
-                    # Remove None values EXACTLY like institution service does
                     data_to_insert = {k: v for k, v in data_to_insert.items() if v is not None}
                     
                     bulk_data.append(data_to_insert)

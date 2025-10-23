@@ -6,7 +6,6 @@ from datetime import datetime
 from database.queries import QueryService
 from database.cached_queries import get_all_institutions_cached
 from services.validation_service import ValidationService
-from services.enrichment_service import EnrichmentService
 from services.standardization_service import StandardizationService
 from services.audit_service import AuditService
 from utils.text_processing import TextProcessor
@@ -19,7 +18,6 @@ class InstitutionService:
     def __init__(self):
         self.query_service = QueryService()
         self.validation_service = ValidationService()
-        self.enrichment_service = EnrichmentService()
         self.standardization_service = StandardizationService()
         self.audit_service = AuditService()
     
@@ -80,21 +78,6 @@ class InstitutionService:
         
         final_name = validation['normalized_name']
         
-        suggestions = None
-        if not all([institution_type_layer1, institution_type_layer2, institution_type_layer3]):
-            suggestions = self.enrichment_service.suggest_institution_metadata(final_name)
-            result['suggestions'] = suggestions
-            
-            if not institution_type_layer1 and suggestions.get('institution_type_layer1'):
-                institution_type_layer1 = suggestions['institution_type_layer1']
-            if not institution_type_layer2 and suggestions.get('institution_type_layer2'):
-                institution_type_layer2 = suggestions['institution_type_layer2']
-            if not institution_type_layer3 and suggestions.get('institution_type_layer3'):
-                institution_type_layer3 = suggestions['institution_type_layer3']
-            if not country_sub and suggestions.get('country_sub'):
-                country_sub = suggestions['country_sub']
-            if not country_parent and suggestions.get('country_parent'):
-                country_parent = suggestions['country_parent']
         
         institution_id = str(uuid.uuid4())
         institution_short = TextProcessor.generate_short_name(final_name)
@@ -230,15 +213,3 @@ class InstitutionService:
         """
         return self.query_service.search_institutions_by_prefix(query, limit)
     
-    def get_institution_suggestions(
-        self,
-        institution_name: str
-    ) -> Dict[str, Any]:
-
-        suggestions = self.enrichment_service.suggest_institution_metadata(institution_name)
-        research_links = self.enrichment_service.get_research_links(institution_name)
-        
-        return {
-            'suggestions': suggestions,
-            'research_links': research_links
-        }

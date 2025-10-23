@@ -302,7 +302,6 @@ def main():
     # Initialize
     initialize_session_state()
     
-    # Render sidebar and get selected page
     page = render_sidebar()
     
     # Render selected page
@@ -310,7 +309,7 @@ def main():
         render_upload_page()
     elif page == "View Current Tables":
         render_view_tables_page()
-    elif page == "NZFT":  # Add this condition
+    elif page == "NZFT": 
         render_nzft_page()
 
 

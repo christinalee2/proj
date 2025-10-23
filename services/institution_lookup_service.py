@@ -509,15 +509,7 @@ Snippet: {result['snippet']}
         )
     
     def lookup_institution(self, institution_name: str) -> InstitutionLookupResult:
-        """
-        Main method: Lookup institution data
-        
-        Args:
-            institution_name: Name of institution
-            
-        Returns:
-            Structured institution data
-        """
+
         suffix_detected = self.detect_public_private_from_suffix(institution_name)
         
         search_results = self.search_trusted_sources(institution_name)
