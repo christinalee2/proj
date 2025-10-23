@@ -275,7 +275,7 @@ class InstitutionLookupService:
         return country_name
     
     def search_trusted_sources(self, institution_name: str) -> List[Dict[str, str]]:
-    """Search for institution info using Serper.dev API"""
+        """Search for institution info using Serper.dev API"""
     
         if not self.serper_api_key:
             print("ERROR: Serper API key not configured")
