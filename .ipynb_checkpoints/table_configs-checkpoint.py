@@ -32,6 +32,15 @@ class TableConfig:
     duplicate_check_fields: Optional[List[str]] = None
 
 
+@dataclass
+class ColumnTypeConfig:
+    """Configuration for column data types for AWS Wrangler"""
+    string_columns: List[str]
+    integer_columns: List[str]
+    float_columns: Optional[List[str]] = None
+    boolean_columns: Optional[List[str]] = None
+
+
 def validate_year(value: Any) -> bool:
     """Validate year is reasonable"""
     if not value:
@@ -271,6 +280,79 @@ TABLE_CONFIGS = {
     # ),
 }
 
+
+COLUMN_TYPE_CONFIGS = {
+    'institution': ColumnTypeConfig(
+        string_columns=[
+            'institution_cpi', 'institution_cpi_short',
+            'institution_type_layer1', 'institution_type_layer2', 'institution_type_layer3',
+            'country_sub', 'country_parent', 'double_counting_risk',
+            'contact_info', 'comments', 'created_by'
+        ],
+        integer_columns=['id_institution_cpi', 'last_verified', 'created_at']
+    ),
+    
+    'instrument': ColumnTypeConfig(
+        string_columns=[
+            'original_name', 'instrument_type', 'instrument_type_layer2',
+            'definition', 'info_quality', 'categorization', 'description',
+            'example', 'created_by'
+        ],
+        integer_columns=['id_instrument', 'created_at']
+    ),
+    
+    'gearing': ColumnTypeConfig(
+        string_columns=[
+            'sector_re', 'country_cpi', 'region_cpi', 'source', 'created_by'
+        ],
+        integer_columns=['id_gearing', 'last_verified', 'created_at'],
+        float_columns=['gearing']
+    ),
+    
+    'multiplier': ColumnTypeConfig(
+        string_columns=[
+            'sub_sector_source', 'sub_sector_bnef', 'country_cpi', 'region_cpi',
+            'currency', 'conversion_rate', 'data_source_type', 'notes', 'created_by'
+        ],
+        integer_columns=['id_multiplier', 'last_verified', 'year_of_analysis', 'created_at'],
+        float_columns=['multiplier_local', 'multiplier_usd']
+    ),
+    
+    'exchange_rates': ColumnTypeConfig(
+        string_columns=['country_cpi', 'currency_code', 'created_by'],
+        integer_columns=['id_fx', 'year', 'created_at'],
+        float_columns=['fx_rate']
+    ),
+    
+    'institution_standardization': ColumnTypeConfig(
+        string_columns=['institution_original', 'institution_cpi', 'created_by'],
+        integer_columns=['id_institution', 'id_institution_cpi', 'created_at']
+    ),
+}
+
+
+TABLE_ID_COLUMNS = {
+    'institution': 'id_institution_cpi',
+    'instrument': 'id_instrument', 
+    'gearing': 'id_gearing',
+    'multiplier': 'id_multiplier',
+    'exchange_rates': 'id_fx',
+    'institution_standardization': 'id_institution',
+}
+
+def get_table_id_column(table_name: str) -> Optional[str]:
+    """Get the ID column name for a specific table"""
+    return TABLE_ID_COLUMNS.get(table_name)
+
+# Add helper functions
+def get_column_type_config(table_name: str) -> Optional[ColumnTypeConfig]:
+    """Get column type configuration for a specific table"""
+    return COLUMN_TYPE_CONFIGS.get(table_name)
+
+def get_all_column_configs() -> Dict[str, ColumnTypeConfig]:
+    """Get all column type configurations"""
+    return COLUMN_TYPE_CONFIGS
+    
 
 def get_table_config(table_name: str) -> Optional[TableConfig]:
     """Get configuration for a specific table"""

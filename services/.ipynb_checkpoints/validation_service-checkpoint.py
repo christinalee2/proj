@@ -40,7 +40,7 @@ class ValidationService:
             'errors': []
         }
         
-        # Check for exact duplicates (case-insensitive)
+        # Check for exact duplicates in institution table (case-insensitive)
         exact_match = existing_institutions[
             existing_institutions['institution_cpi'].str.lower() == normalized_name.lower()
         ]
@@ -49,11 +49,33 @@ class ValidationService:
             validation_result['has_exact_duplicate'] = True
             validation_result['exact_match'] = exact_match.iloc[0].to_dict()
             validation_result['errors'].append(
-                f"Institution '{normalized_name}' already exists in the database"
+                f"Institution '{normalized_name}' already exists in the institution table"
             )
             validation_result['is_valid'] = False
         
-        # Check for fuzzy matches
+        # NEW: Also check for exact duplicates in institution_standardization table
+        if not validation_result['has_exact_duplicate']:
+            try:
+                # Use the query service to get standardization data
+                standardization_df = self.query_service.get_table_data('institution_standardization', limit=None)
+                if not standardization_df.empty and 'institution_original' in standardization_df.columns:
+                    standardization_match = standardization_df[
+                        standardization_df['institution_original'].str.lower() == normalized_name.lower()
+                    ]
+                    
+                    if not standardization_match.empty:
+                        validation_result['has_exact_duplicate'] = True
+                        validation_result['exact_match'] = standardization_match.iloc[0].to_dict()
+                        validation_result['errors'].append(
+                            f"Institution '{normalized_name}' already exists in the standardization table"
+                        )
+                        validation_result['is_valid'] = False
+                        
+            except Exception as e:
+                print(f"Error checking institution_standardization table: {e}")
+                # Don't fail validation if we can't check standardization table
+        
+        # Check for fuzzy matches (only if no exact duplicate found)
         if not validation_result['has_exact_duplicate']:
             fuzzy_matches = self.fuzzy_matcher.find_similar_institutions(
                 normalized_name,
@@ -116,7 +138,15 @@ class ValidationService:
             
             if result['has_exact_duplicate']:
                 status = 'DUPLICATE'
-                message = f"Exact duplicate: {result['exact_match']['institution_cpi']}"
+                exact_match = result['exact_match']
+                if 'institution_cpi' in exact_match:
+                    # Match found in institution table
+                    message = f"Exact duplicate in institution table: {exact_match['institution_cpi']}"
+                elif 'institution_original' in exact_match:
+                    # Match found in standardization table
+                    message = f"Exact duplicate in standardization table: {exact_match['institution_original']}"
+                else:
+                    message = "Exact duplicate found"
             elif result['has_fuzzy_duplicate']:
                 status = 'WARNING'
                 best_match = result['fuzzy_matches'][0]

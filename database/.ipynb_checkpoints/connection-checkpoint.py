@@ -5,6 +5,7 @@ from typing import Optional, Dict, Any, List
 import streamlit as st
 import pandas as pd
 from config import AWS_REGION, ATHENA_DATABASE, ATHENA_OUTPUT_LOCATION, S3_BUCKET, CURRENT_YEAR
+from table_configs import get_column_type_config, get_table_id_column
 import os
 import traceback
 import io
@@ -50,7 +51,7 @@ class DatabaseConnection:
     _connection: Optional[Cursor] = None
     
     S3_BUCKET = os.getenv('S3_BUCKET', 'cpi-uk-us-datascience-stage')
-    S3_BASE_PATH = 'auxiliary-data/reference-data/reference-db'
+    S3_BASE_PATH = 'auxiliary-data/reference-data/reference-db-2'
 
     #Hardcoding in options for table locations, update to add more tables
     TABLE_FILES = {
@@ -199,6 +200,72 @@ class DatabaseConnection:
         except Exception as e:
             print(f"Error cleaning DataFrame: {e}")
             return df
+
+
+
+    @classmethod
+    def _apply_column_types(cls, df: pd.DataFrame, table: str) -> pd.DataFrame:
+        """Apply proper data types to DataFrame columns based on table configuration"""
+        
+        column_config = get_column_type_config(table)
+        if not column_config:
+            print(f"No column type configuration found for table: {table}")
+            return df
+        
+        # Cast string columns
+        for col in column_config.string_columns:
+            if col in df.columns:
+                df[col] = df[col].astype('string')
+        
+        # Cast integer columns
+        for col in column_config.integer_columns:
+            if col in df.columns:
+                df[col] = df[col].astype('Int64')  # Nullable integer
+        
+        # Cast float columns if defined
+        if column_config.float_columns:
+            for col in column_config.float_columns:
+                if col in df.columns:
+                    df[col] = df[col].astype('Float64')  # Nullable float
+        
+        # Cast boolean columns if defined
+        if column_config.boolean_columns:
+            for col in column_config.boolean_columns:
+                if col in df.columns:
+                    df[col] = df[col].astype('boolean')  # Nullable boolean
+        
+        return df
+
+    @classmethod
+    def get_next_id_efficiently(cls, table: str) -> int:
+        """Get next ID using Athena query instead of reading full table"""
+        try:
+            id_column = get_table_id_column(table)
+            if not id_column:
+                raise ValueError(f"No ID column configured for table: {table}")
+            
+            # Use Athena to get max ID efficiently
+            query = f"SELECT MAX({id_column}) as max_id FROM {table}"
+            print(f"Getting max ID with query: {query}")
+            
+            result = cls.execute_query(query)
+            
+            if result.empty or result.iloc[0]['max_id'] is None:
+                print(f"No existing records found, starting with ID 1")
+                return 1
+                
+            max_id = int(result.iloc[0]['max_id'])
+            next_id = max_id + 1
+            print(f"Found max ID {max_id}, next ID will be {next_id}")
+            return next_id
+            
+        except Exception as e:
+            print(f"Athena query failed, falling back to full table read: {e}")
+            # Fallback to the slow method if Athena query fails
+            existing_data = cls.get_table_data(table, limit=None)
+            id_column, next_id = get_next_id_for_table(existing_data, table)
+            return next_id
+        
     
     @classmethod
     def execute_insert(cls, table: str, data: Dict[str, Any]) -> bool:
@@ -209,15 +276,41 @@ class DatabaseConnection:
             return cls._execute_insert_awswrangler(table, data)
         else:
             return cls._execute_insert_original(table, data)
+
+
+
     
     @classmethod
     def _execute_insert_awswrangler(cls, table: str, data: Dict[str, Any]) -> bool:
         """Insert using awswrangler - need to set up fully, right now it's always falling back to the original version but that seems to work well so have been keeping as is"""
         try:
             print(f"=== STARTING AWSWRANGLER INSERT FOR {table} ===")
+
+                    
+            # schemas = {
+            #     'institution': {
+            #         'id_institution_cpi': 'int',
+            #         'institution_cpi': 'string',
+            #         'institution_cpi_short': 'string',
+            #         'last_verified': 'int',
+            #         'institution_type_layer1': 'string',
+            #         'institution_type_layer2': 'string',
+            #         'institution_type_layer3': 'string',
+            #         'country_sub': 'string',
+            #         'country_parent': 'string',
+            #         'double_counting_risk': 'string',
+            #         'contact_info': 'string',
+            #         'comments': 'string',
+            #         'created_at': 'int',
+            #         'created_by': 'string'
+            #     }
+            # }
             
-            existing_data = cls.get_table_data(table, limit=None)
-            id_column, next_id = get_next_id_for_table(existing_data, table)
+            id_column = get_table_id_column(table)
+            if not id_column:
+                raise ValueError(f"No ID column configured for table: {table}")
+                
+            next_id = cls.get_next_id_efficiently(table)
             
             data_with_id = data.copy()
             data_with_id[id_column] = next_id
@@ -230,20 +323,49 @@ class DatabaseConnection:
             if df_cleaned.empty:
                 print("No valid data to insert after cleaning")
                 return False
+
+            df_cleaned = cls._apply_column_types(df_cleaned, table)
             
             s3_path = cls.TABLE_LOCATIONS.get(table)
             if not s3_path:
                 raise ValueError(f"No S3 location configured for table: {table}")
             
             print(f"Inserting to S3 location: {s3_path}")
+
+            # # schema = schemas.get(table, {})
+            # #########################################
+            # if table == 'institution':
+            #     string_cols = [
+            #         'institution_cpi', 'institution_cpi_short',
+            #         'institution_type_layer1', 'institution_type_layer2', 'institution_type_layer3',
+            #         'country_sub', 'country_parent', 'double_counting_risk',
+            #         'contact_info', 'comments', 'created_by'
+            #     ]
+            #     int_cols = ['id_institution_cpi', 'last_verified', 'created_at']
+                
+            #     # Cast string columns
+            #     for col in string_cols:
+            #         if col in df_cleaned.columns:
+            #             df_cleaned[col] = df_cleaned[col].astype('string')
+                
+            #     # Cast integer columns
+            #     for col in int_cols:
+            #         if col in df_cleaned.columns:
+            #             df_cleaned[col] = df_cleaned[col].astype('Int64')
+
+            
+
+            #     ###################################
+
+            # df_cleaned = cls._apply_column_types(df_cleaned, table)
             
             wr.s3.to_parquet(
                 df=df_cleaned,
                 path=s3_path,
                 dataset=True,
                 mode='append',
-                database=ATHENA_DATABASE,
-                table=table,
+                # database=ATHENA_DATABASE,
+                # table=table,
                 compression='snappy'
             )
             
@@ -336,10 +458,18 @@ class DatabaseConnection:
                 return True
             
             print(f"=== STARTING AWSWRANGLER BULK INSERT FOR {table} ({len(data_list)} rows) ===")
+
+
+            id_column = get_table_id_column(table)
+            if not id_column:
+                # Fallback to auto-detection if not configured
+                existing_data = cls.get_table_data(table, limit=1) 
+                id_column, _ = get_next_id_for_table(existing_data, table)
+                
+            next_id = cls.get_next_id_efficiently(table)
+            print(f"Using ID column: {id_column}, starting from ID: {next_id}")
             
-            existing_data = cls.get_table_data(table, limit=None)
-            id_column, next_id = get_next_id_for_table(existing_data, table)
-            
+            # Prepare records with sequential IDs
             records_with_ids = []
             for i, record in enumerate(data_list):
                 record_with_id = record.copy()
@@ -348,10 +478,27 @@ class DatabaseConnection:
             
             df_to_insert = pd.DataFrame(records_with_ids)
             df_cleaned = cls._clean_dataframe_for_insert(df_to_insert)
+        
+            # existing_data = cls.get_table_data(table, limit=None)
+            # id_column, next_id = get_next_id_for_table(existing_data, table)
+            
+            # records_with_ids = []
+            # for i, record in enumerate(data_list):
+            #     record_with_id = record.copy()
+            #     record_with_id[id_column] = next_id + i
+            #     records_with_ids.append(record_with_id)
+            
+            # df_to_insert = pd.DataFrame(records_with_ids)
+            # df_cleaned = cls._clean_dataframe_for_insert(df_to_insert)
             
             if df_cleaned.empty:
                 print("No valid data to insert after cleaning")
                 return False
+
+            try:
+                df_cleaned = cls._apply_column_types(df_cleaned, table)
+            except AttributeError:
+                pass
             
             s3_path = cls.TABLE_LOCATIONS.get(table)
             if not s3_path:
@@ -362,8 +509,8 @@ class DatabaseConnection:
                 path=s3_path,
                 dataset=True,
                 mode='append',
-                database=ATHENA_DATABASE,
-                table=table,
+                # database=ATHENA_DATABASE,
+                # table=table,
                 compression='snappy'
             )
             

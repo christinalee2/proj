@@ -64,26 +64,26 @@ class InstitutionService:
             'message': ''
         }
         
-        existing_institutions = get_all_institutions_cached()
+        # existing_institutions = get_all_institutions_cached()
         
-        validation = self.validation_service.validate_institution_entry(
-            institution_name,
-            existing_institutions
-        )
-        result['validation'] = validation
+        # validation = self.validation_service.validate_institution_entry(
+        #     institution_name,
+        #     existing_institutions
+        # )
+        # result['validation'] = validation
         
-        if validation['has_exact_duplicate']:
-            result['message'] = f"Institution already exists: {validation['exact_match']['institution_cpi']}"
-            return result
+        # if validation['has_exact_duplicate']:
+        #     result['message'] = f"Institution already exists: {validation['exact_match']['institution_cpi']}"
+        #     return result
         
-        final_name = validation['normalized_name']
+        # final_name = validation['normalized_name']
         
-        
-        institution_id = str(uuid.uuid4())
+        final_name = TextProcessor.normalize_institution_name(institution_name)
+        # institution_id = str(uuid.uuid4())
         institution_short = TextProcessor.generate_short_name(final_name)
         
         institution_data = {
-            'id_institution_cpi': institution_id,
+            # 'id_institution_cpi': institution_id,
             'institution_cpi': final_name,
             'institution_cpi_short': institution_short,
             'last_verified': CURRENT_YEAR,
@@ -104,10 +104,10 @@ class InstitutionService:
         success = self.query_service.insert_institution(institution_data)
         
         if success:
-            self.audit_service.log_insert('institution', institution_id, institution_data, user)
+            # self.audit_service.log_insert('institution', institution_id, institution_data, user)
             
             result['success'] = True
-            result['institution_id'] = institution_id
+            # result['institution_id'] = institution_id
             result['institution_name'] = final_name
             result['message'] += 'Institution created successfully.'
         else:

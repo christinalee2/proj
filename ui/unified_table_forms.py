@@ -6,6 +6,7 @@ from dataclasses import dataclass
 
 from table_configs import get_table_config, TableConfig
 from services.institution_service import InstitutionService
+from services.institution_lookup_service import InstitutionLookupService
 from database.cached_queries import get_table_data_cached
 from database.queries import QueryService
 from utils.text_processing import TextProcessor
@@ -33,8 +34,8 @@ def normalize_name(name: str) -> str:
     return TextProcessor.normalize_institution_name(name).lower().strip()
 
 
-def check_exact_duplicate(input_value: str, existing_df: pd.DataFrame, primary_field: str) -> Optional[str]:
-    """Check for exact duplicate in any table's primary field"""
+def check_exact_duplicate(input_value: str, existing_df: pd.DataFrame, primary_field: str, standardization_df: Optional[pd.DataFrame] = None) -> Optional[str]:
+    """Check for exact duplicate in institution table and institution_standardization table"""
     if existing_df.empty or primary_field not in existing_df.columns:
         return None
     
@@ -44,6 +45,18 @@ def check_exact_duplicate(input_value: str, existing_df: pd.DataFrame, primary_f
         existing_value = str(row.get(primary_field, '')).strip()
         if normalize_name(existing_value) == normalized_input:
             return existing_value
+    
+    if primary_field == 'institution_cpi':
+        try:
+            # standardization_df = get_table_data_cached('institution_standardization', limit=None)
+            if not standardization_df.empty and 'institution_original' in standardization_df.columns:
+                for _, row in standardization_df.iterrows():
+                    existing_value = str(row.get('institution_original', '')).strip()
+                    if normalize_name(existing_value) == normalized_input:
+                        return existing_value
+        except Exception as e:
+            print(f"Error checking institution_standardization: {e}")
+    
     return None
 
 
@@ -71,18 +84,18 @@ def check_fuzzy_matches(input_value: str, existing_df: pd.DataFrame, primary_fie
         return []
 
 
-def get_table_dropdown_options(table_name: str, config: TableConfig) -> Dict[str, List[str]]:
-    """Get dropdown options for all select fields by reading from the table itself"""
+def get_table_dropdown_options(table_name: str, config, existing_data: pd.DataFrame):
+
     options = {}
     
-    try:
-        existing_data = get_table_data_cached(table_name, limit=None)
-        
+    try:        
         if existing_data.empty:
-            for field_config in config.fields:
-                if field_config.field_type == 'select':
-                    options[field_config.name] = ['']
-            return options
+            existing_data = get_table_data_cached(table_name, limit=None)
+            if existing_data.empty:
+                for field_config in config.fields:
+                    if field_config.field_type == 'select':
+                        options[field_config.name] = ['']
+                return options
         
         # Getting values for select optinos
         for field_config in config.fields:
@@ -131,6 +144,8 @@ def get_table_dropdown_options(table_name: str, config: TableConfig) -> Dict[str
             if field_config.field_type == 'select':
                 options[field_config.name] = ['']
         return options
+
+
 
 
 def auto_populate_data(data: Dict[str, Any], username: str) -> Dict[str, Any]:
@@ -322,6 +337,35 @@ def render_form_field(field_config, dropdown_options: Dict[str, List[str]], key_
         )
 
 
+def get_table_reference_data(table_name: str, config):
+    """Get reference data needed for a specific table"""
+    session_key = f'{table_name}_reference_data'
+    
+    if session_key not in st.session_state:
+        with st.spinner(f"Loading {table_name} reference data..."):
+            standardization_data = None
+            if table_name == 'institution':
+                try:
+                    standardization_data = get_table_data_cached('institution_standardization', limit=None)
+                except Exception as e:
+                    print(f"Could not load standardization data: {e}")
+                    standardization_data = pd.DataFrame()
+                
+            existing_data = get_table_data_cached(table_name, limit=None)
+            
+            dropdown_options = get_table_dropdown_options(table_name, config, existing_data)
+            
+            st.session_state[session_key] = {
+                'existing_data': existing_data,
+                'standardization_data': standardization_data,
+                'dropdown_options': dropdown_options
+            }
+    
+    return st.session_state[session_key]
+
+
+
+    
 def render_unified_single_entry_form(table_name: str):
     """
     Unified single entry form with duplicate checking and Keep functionality for any table
@@ -339,8 +383,13 @@ def render_unified_single_entry_form(table_name: str):
     st.markdown(config.description)
     st.markdown("---")
     
-    existing_data = get_table_data_cached(table_name, limit=None)
-    dropdown_options = get_table_dropdown_options(table_name, config)
+    # existing_data = get_table_data_cached(table_name, limit=None)
+    # dropdown_options = get_table_dropdown_options(table_name, config)
+
+    reference_data = get_table_reference_data(table_name, config)
+    existing_data = reference_data['existing_data']
+    dropdown_options = reference_data['dropdown_options']
+    standardization_data = reference_data.get('standardization_data')
     
     primary_field = config.required_fields[0] if config.required_fields else config.fields[0].name
     primary_field_config = next((f for f in config.fields if f.name == primary_field), None)
@@ -357,7 +406,7 @@ def render_unified_single_entry_form(table_name: str):
         
         if primary_value and len(str(primary_value).strip()) >= 3:
             
-            exact = check_exact_duplicate(primary_value, existing_data, primary_field)
+            exact = check_exact_duplicate(primary_value, existing_data, primary_field, standardization_data)
             if exact:
                 st.warning(f"'{exact}' already exists in the {config.display_name.lower()} table.")
             
@@ -388,7 +437,7 @@ def render_unified_single_entry_form(table_name: str):
                         with col2:
                             if st.button("Keep", key=f"keep_{table_name}_{i}", help=f"Use '{primary_value}' and map to '{name}'"):
                                 if table_name == 'institution':
-                                    result = standardization_service.process_keep_institution(primary_value, name)
+                                    result = standardization_service.process_keep_institution(primary_value, name, standardization_data, existing_data)
                                 elif table_name == 'geography':
                                     result = standardization_service.process_keep_geography(primary_value, name)
                                 else:
@@ -412,7 +461,6 @@ def render_unified_single_entry_form(table_name: str):
             if st.button("Auto-Lookup", key="lookup_btn", help="Automatically find institution details from trusted sources"):
                 with st.spinner("Searching trusted sources and extracting data..."):
                     try:
-                        from services.institution_lookup_service import InstitutionLookupService
                         
                         valid_countries = set()
                         if not existing_data.empty:
@@ -558,6 +606,7 @@ def render_unified_single_entry_form(table_name: str):
 
 
 
+
 def render_unified_bulk_upload(table_name: str):
     """
     Enhanced unified bulk upload interface with inline fuzzy matching
@@ -566,6 +615,11 @@ def render_unified_bulk_upload(table_name: str):
     if not config:
         st.error(f"No configuration found for table: {table_name}")
         return
+
+    reference_data = get_table_reference_data(table_name, config)
+    existing_data = reference_data['existing_data']
+    dropdown_options = reference_data['dropdown_options']
+    standardization_data = reference_data.get('standardization_data')
     
     st.subheader(f"Bulk Upload to {config.display_name} Table")
     st.markdown(config.description)
@@ -587,13 +641,13 @@ def render_unified_bulk_upload(table_name: str):
         df = process_uploaded_file(uploaded_file, config, session_key)
         
         if df is not None:
-            validation_results = run_bulk_validation(df, table_name, config, session_key)
+            validation_results = run_bulk_validation(df, table_name, config, session_key, existing_data)
             
             if validation_results:
-                render_enhanced_bulk_upload_grid(validation_results, config, session_key, table_name)
+                render_enhanced_bulk_upload_grid(validation_results, config, session_key, table_name, existing_data)
 
 
-def render_enhanced_bulk_upload_grid(validation_results: List[ValidationResult], config: TableConfig, session_key: str, table_name: str):
+def render_enhanced_bulk_upload_grid(validation_results: List[ValidationResult], config: TableConfig, session_key: str, table_name: str, existing_data: pd.DataFrame):
     """Enhanced bulk upload grid with inline fuzzy matching"""
     valid_results = [r for r in validation_results if r.status == 'valid']
     fuzzy_results = [r for r in validation_results if r.status == 'fuzzy_match']
@@ -647,7 +701,7 @@ def render_enhanced_bulk_upload_grid(validation_results: List[ValidationResult],
     col1, col2, col3 = st.columns(3)
     with col1:
         if st.button("Auto-Lookup All Missing Data", use_container_width=True):
-            run_batch_lookup(valid_results + fuzzy_results, table_name, session_key)
+            run_batch_lookup(valid_results + fuzzy_results, table_name, session_key, existing_data)
     with col2:
         if st.button("Skip All with Similar Matches", use_container_width=True):
             for result in fuzzy_results:
@@ -693,7 +747,7 @@ def render_enhanced_bulk_upload_grid(validation_results: List[ValidationResult],
         paginated_rows = all_to_display
     
     for result in paginated_rows:
-        render_enhanced_grid_row(result, config, session_key, table_name)
+        render_enhanced_grid_row(result, config, session_key, table_name, existing_data)
     
     # Upload button
     st.markdown("---")
@@ -749,7 +803,7 @@ def render_enhanced_grid_header(config: TableConfig):
         st.markdown("")
 
 
-def render_enhanced_grid_row(result: ValidationResult, config: TableConfig, session_key: str, table_name: str):
+def render_enhanced_grid_row(result: ValidationResult, config: TableConfig, session_key: str, table_name: str, existing_data: pd.DataFrame):
     """Enhanced grid row with slim blue info box for fuzzy matches"""
     
     if f'{session_key}_edited_data' not in st.session_state:
@@ -825,7 +879,7 @@ def render_enhanced_grid_row(result: ValidationResult, config: TableConfig, sess
         
         cols = st.columns(col_widths)
         
-        dropdown_options = get_table_dropdown_options(table_name, config)
+        dropdown_options = get_table_dropdown_options(table_name, config, existing_data)
         
         lookup_result = st.session_state.get(f'{session_key}_lookup_results', {}).get(result.row_index)
         
@@ -1042,11 +1096,12 @@ def process_uploaded_file(uploaded_file, config: TableConfig, session_key: str) 
     return st.session_state[f'{session_key}_df']
 
 
-def run_bulk_validation(df: pd.DataFrame, table_name: str, config: TableConfig, session_key: str) -> Optional[List[ValidationResult]]:
+def run_bulk_validation(df: pd.DataFrame, table_name: str, config: TableConfig, session_key: str, existing_data: pd.DataFrame) -> Optional[List[ValidationResult]]:
     """Run validation with duplicate checking on bulk upload"""
     if st.session_state[f'{session_key}_validation_results'] is None:
         with st.spinner("Validating entries and checking for duplicates..."):
-            existing_data = get_table_data_cached(table_name, limit=None)
+            if existing_data.empty:
+                existing_data = get_table_data_cached(table_name, limit=None)
             primary_field = config.required_fields[0] if config.required_fields else config.fields[0].name
             
             validation_results = []
@@ -1119,7 +1174,7 @@ def validate_bulk_row(row_data: Dict, row_index: int, existing_data: pd.DataFram
 
 
 
-def run_single_lookup(result: ValidationResult, table_name: str, session_key: str):
+def run_single_lookup(result: ValidationResult, table_name: str, session_key: str, existing_data: pd.DataFrame):
     """Run auto-lookup for a single entry"""
     if table_name != 'institution':
         st.info("Auto-lookup is only available for institution table")
@@ -1132,7 +1187,7 @@ def run_single_lookup(result: ValidationResult, table_name: str, session_key: st
         try:
             from services.institution_lookup_service import InstitutionLookupService
             
-            existing_data = get_table_data_cached('institution', limit=None)
+            # existing_data = get_table_data_cached('institution', limit=None)
             valid_countries = set()
             if not existing_data.empty:
                 if 'country_sub' in existing_data.columns:
@@ -1173,7 +1228,7 @@ def run_single_lookup(result: ValidationResult, table_name: str, session_key: st
             st.error(f"Lookup failed: {str(e)}")
 
 
-def run_batch_lookup(results: List[ValidationResult], table_name: str, session_key: str):
+def run_batch_lookup(results: List[ValidationResult], table_name: str, session_key: str, existing_data: pd.DataFrame):
     """Run auto-lookup for multiple entries"""
     if table_name != 'institution':
         st.info("Auto-lookup is only available for institution table")
@@ -1195,7 +1250,7 @@ def run_batch_lookup(results: List[ValidationResult], table_name: str, session_k
     try:
         from services.institution_lookup_service import InstitutionLookupService
         
-        existing_data = get_table_data_cached('institution', limit=None)
+        # existing_data = get_table_data_cached('institution', limit=None)
         valid_countries = set()
         if not existing_data.empty:
             if 'country_sub' in existing_data.columns:
@@ -1373,4 +1428,4 @@ def execute_unified_bulk_insert(validation_results: List[ValidationResult], conf
                     st.session_state[f'{session_key}_{key}'] = {}
                 else:
                     st.session_state[f'{session_key}_{key}'] = None
-            st.rerun()
+            st.rerun()           

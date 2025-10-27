@@ -80,12 +80,32 @@ def render_sidebar():
         
         st.markdown("---")
         
+        # st.subheader("Cache Management")
+        # col1, col2 = st.columns(2)
+        
+        # with col1:
+        #     if st.button("🔄 Clear Data Cache", help="Clear cached table data", use_container_width=True):
+        #         st.cache_data.clear()
+        #         st.success("Data cache cleared!")
+        #         st.rerun()
+        
+        # with col2:
+        #     if st.button("🔄 Clear All", help="Clear all caches", use_container_width=True):
+        #         st.cache_data.clear()
+        #         st.cache_resource.clear()
+        #         st.success("All caches cleared!")
+        #         st.rerun()
+
         st.subheader("Cache Management")
         col1, col2 = st.columns(2)
         
         with col1:
             if st.button("🔄 Clear Data Cache", help="Clear cached table data", use_container_width=True):
                 st.cache_data.clear()
+                # Clear all table reference data from session state
+                keys_to_clear = [key for key in st.session_state.keys() if key.endswith('_reference_data')]
+                for key in keys_to_clear:
+                    del st.session_state[key]
                 st.success("Data cache cleared!")
                 st.rerun()
         
@@ -93,6 +113,10 @@ def render_sidebar():
             if st.button("🔄 Clear All", help="Clear all caches", use_container_width=True):
                 st.cache_data.clear()
                 st.cache_resource.clear()
+                # Clear all session state
+                keys_to_clear = [key for key in st.session_state.keys() if key.endswith('_reference_data')]
+                for key in keys_to_clear:
+                    del st.session_state[key]
                 st.success("All caches cleared!")
                 st.rerun()
         
@@ -183,6 +207,15 @@ def render_table_view(table_name: str):
     with col2:
         if st.button("🔄 Refresh Data", help="Force reload from database", use_container_width=True):
             st.cache_data.clear()
+            
+            session_key = f'{table_name}_reference_data'
+            if session_key in st.session_state:
+                del st.session_state[session_key]
+            
+            keys_to_clear = [key for key in st.session_state.keys() if key.endswith('_reference_data')]
+            for key in keys_to_clear:
+                del st.session_state[key]
+            
             st.success("Cache cleared! Data will reload fresh.")
             st.rerun()
     
@@ -190,7 +223,14 @@ def render_table_view(table_name: str):
     
     with st.spinner(f"Loading {config.display_name} data..."):
         try:
-            df = get_table_data_cached(table_name, limit=None)
+            session_key = f'{table_name}_reference_data'
+            if session_key in st.session_state:
+                df = st.session_state[session_key]['existing_data']
+                st.info(f"Loaded {len(df):,} rows from session state")
+            else:
+                df = get_table_data_cached(table_name, limit=None)
+                st.info(f"Loaded {len(df):,} rows from database")
+                
             st.info(f"Loaded all {len(df):,} rows from {config.display_name}")
             
             if df.empty:

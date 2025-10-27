@@ -12,44 +12,44 @@ class AuditService:
     def __init__(self):
         self.query_service = QueryService()
     
-    def log_insert(
-        self,
-        table_name: str,
-        record_id: str,
-        data: Dict[str, Any],
-        user: str = "system"
-    ) -> bool:
-        """ 
-        Args:
-            table_name: Name of the table
-            record_id: ID of the inserted record
-            data: Dictionary of inserted data
-            user: User who performed the operation (from sidebar entry)
+    # def log_insert(
+    #     self,
+    #     table_name: str,
+    #     record_id: str,
+    #     data: Dict[str, Any],
+    #     user: str = "system"
+    # ) -> bool:
+    #     """ 
+    #     Args:
+    #         table_name: Name of the table
+    #         record_id: ID of the inserted record
+    #         data: Dictionary of inserted data
+    #         user: User who performed the operation (from sidebar entry)
             
-        Returns:
-            True if successful, False otherwise
-        """
-        try:
-            for field_name, new_value in data.items():
-                audit_entry = {
-                    'id': str(uuid.uuid4()),
-                    'table_name': table_name,
-                    'operation': 'INSERT',
-                    'record_id': record_id,
-                    'field_name': field_name,
-                    'old_value': None,
-                    'new_value': str(new_value) if new_value is not None else None,
-                    'changed_by': user,
-                    'changed_at': CURRENT_YEAR,
-                    'notes': f'New record inserted into {table_name}'
-                }
+    #     Returns:
+    #         True if successful, False otherwise
+    #     """
+    #     try:
+    #         for field_name, new_value in data.items():
+    #             audit_entry = {
+    #                 'id': str(uuid.uuid4()),
+    #                 'table_name': table_name,
+    #                 'operation': 'INSERT',
+    #                 'record_id': record_id,
+    #                 'field_name': field_name,
+    #                 'old_value': None,
+    #                 'new_value': str(new_value) if new_value is not None else None,
+    #                 'changed_by': user,
+    #                 'changed_at': CURRENT_YEAR,
+    #                 'notes': f'New record inserted into {table_name}'
+    #             }
                 
-                self.query_service.insert_audit_log(audit_entry)
+    #             self.query_service.insert_audit_log(audit_entry)
             
-            return True
-        except Exception as e:
-            print(f"Error logging insert: {e}")
-            return False
+    #         return True
+    #     except Exception as e:
+    #         print(f"Error logging insert: {e}")
+    #         return False
     
     def log_update(
         self,

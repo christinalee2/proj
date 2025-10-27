@@ -19,8 +19,8 @@ def get_env_var(key: str, default: str = '') -> str:
 
 AWS_REGION = get_env_var('AWS_REGION', 'us-east-1')
 S3_BUCKET = get_env_var('S3_BUCKET', 'cpi-uk-us-datascience-stage')
-ATHENA_DATABASE = get_env_var('ATHENA_DATABASE', 'ref_testing')
-ATHENA_OUTPUT_LOCATION = get_env_var('ATHENA_OUTPUT_LOCATION', f's3://{S3_BUCKET}/auxiliary-data/reference-data/reference-db/athena-query-results/')
+ATHENA_DATABASE = get_env_var('ATHENA_DATABASE', 'ref_testing_2')
+ATHENA_OUTPUT_LOCATION = get_env_var('ATHENA_OUTPUT_LOCATION', f's3://{S3_BUCKET}/auxiliary-data/reference-data/reference-db-2/athena-query-results/')
 
 OPENAI_API_KEY = get_env_var('OPENAI_API_KEY', '')
 
