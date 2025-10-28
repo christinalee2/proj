@@ -262,6 +262,30 @@ TABLE_CONFIGS = {
                        help_text='Only enter if you know the mapping for standardization already or adding a new institution.'),
         ] + AUDIT_FIELDS
     ),
+
+    'hierarchy': TableConfig(
+        table_name='hierarchy',
+        display_name='Institution Hierarchy',
+        description='Define parent-child relationships between institutions (e.g., ownership, subsidiaries, governments)',
+        primary_key_field='id_hierarchy',
+        required_fields=['parent_institution', 'child_institution'],
+        duplicate_check_fields=['id_parent', 'id_child'],
+        fields=[
+            FieldConfig('parent_institution', 'Parent Institution', 'text', required=True,
+                       help_text='Name of the parent institution (must exist in institution table)',
+                       placeholder='Search for parent institution...'),
+            FieldConfig('child_institution', 'Child Institution', 'text', required=True,
+                       help_text='Name of the child institution (must exist in institution table)',
+                       placeholder='Search for child institution...'),
+            FieldConfig('percent_ownership', 'Ownership Percentage', 'number', 
+                       help_text='Ownership percentage as decimal (0.0 to 1.0, e.g., 0.51 for 51%)'),
+            FieldConfig('is_controlling_institution', 'Is Controlling', 'boolean',
+                       help_text='True if parent has controlling interest (>50% ownership)'),
+            FieldConfig('relationship_type', 'Relationship Type', 'text',
+                       help_text='Type of relationship (e.g., "subsidiary", "division", "branch")',
+                       placeholder='Enter relationship type...'),
+        ] + AUDIT_FIELDS
+    ),
     
     # 'geography_standardization': TableConfig(
     #     table_name='geography_standardization',
@@ -328,6 +352,15 @@ COLUMN_TYPE_CONFIGS = {
         string_columns=['institution_original', 'institution_cpi', 'created_by'],
         integer_columns=['id_institution', 'id_institution_cpi', 'created_at']
     ),
+    
+    'hierarchy': ColumnTypeConfig(
+        string_columns=[
+            'parent_institution', 'child_institution', 'relationship_type', 'created_by'
+        ],
+        integer_columns=['id_hierarchy', 'id_parent', 'id_child', 'created_at'],
+        float_columns=['percent_ownership'],
+        boolean_columns=['is_controlling_institution']
+    ),
 }
 
 
@@ -338,6 +371,7 @@ TABLE_ID_COLUMNS = {
     'multiplier': 'id_multiplier',
     'exchange_rates': 'id_fx',
     'institution_standardization': 'id_institution',
+    'hierarchy': 'id_hierarchy'
 }
 
 def get_table_id_column(table_name: str) -> Optional[str]:

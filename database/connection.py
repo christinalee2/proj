@@ -68,7 +68,8 @@ class DatabaseConnection:
         'exchange_rates': f'{S3_BASE_PATH}/exchange_rates/data.parquet',
         'state_control': f'{S3_BASE_PATH}/state_control/data.parquet',
         'institution_standardization': f'{S3_BASE_PATH}/institution_standardization/data.parquet',
-        'geography_standardization': f'{S3_BASE_PATH}/geography_standardization/data.parquet'
+        'geography_standardization': f'{S3_BASE_PATH}/geography_standardization/data.parquet',
+        'hierarchy': f'{S3_BASE_PATH}/hierarchy/data.parquet'
     }
     
     # Table S3 locations for awswrangler inserts
@@ -86,7 +87,8 @@ class DatabaseConnection:
         'exchange_rates': f's3://{S3_BUCKET}/{S3_BASE_PATH}/exchange_rates/',
         'state_control': f's3://{S3_BUCKET}/{S3_BASE_PATH}/state_control/',
         'institution_standardization': f's3://{S3_BUCKET}/{S3_BASE_PATH}/institution_standardization/',
-        'geography_standardization': f's3://{S3_BUCKET}/{S3_BASE_PATH}/geography_standardization/'
+        'geography_standardization': f's3://{S3_BUCKET}/{S3_BASE_PATH}/geography_standardization/',
+        'hierarchy': f's3://{S3_BUCKET}/{S3_BASE_PATH}/hierarchy/'
     }
     
     @classmethod
