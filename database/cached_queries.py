@@ -3,7 +3,7 @@ import pandas as pd
 from database.queries import QueryService
 
 
-@st.cache_data(ttl=7200)  # 2 hours - reference data rarely changes
+@st.cache_data(ttl=7200)  # 2 hours - large table so takes a hwile to load, but want reasonable updatedness
 def get_all_institutions_cached():
     """
     Cached version of get_all_institutions
@@ -21,7 +21,7 @@ def get_table_data_cached(table_name: str, limit: int = None) -> pd.DataFrame:
     return QueryService.get_table_data(table_name, limit)
 
 
-@st.cache_data(ttl=7200)  # 2 hours
+@st.cache_data(ttl=7200) 
 def get_countries_cached():
     """
     Cached version of get_countries
@@ -32,12 +32,11 @@ def get_countries_cached():
     return service.get_countries()
 
 
-@st.cache_data(ttl=14400)  # 4 hours - dropdown options change very rarely
+@st.cache_data(ttl=14400)  # 4 hours - dropdown options won't really change
 def get_dropdown_options():
     """
     Load and cache all dropdown options at once
     Returns dictionary with all dropdown option lists
-    Cache expires after 4 hours
     
     Returns:
         Dict with keys: type1, type2, type3, countries
@@ -47,7 +46,6 @@ def get_dropdown_options():
     
     country_list = countries_df['country_cpi'].tolist() if not countries_df.empty else []
     
-    # Default options
     type1_options = ['', 'Public', 'Private']
     type2_options = ['', 'Funds', 'Corporation', 'Commercial FI', 'Government', 
                      'Institutional Investors', 'Bilateral DFI', 'SOE', 

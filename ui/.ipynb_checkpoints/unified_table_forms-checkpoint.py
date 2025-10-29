@@ -86,6 +86,40 @@ def check_fuzzy_matches(input_value: str, existing_df: pd.DataFrame, primary_fie
         return []
 
 
+
+
+
+def render_lookup_sources_compact(lookup_result, key_suffix=""):
+    """Render lookup sources in a compact expandable format"""
+    if not lookup_result or not lookup_result.sources:
+        return
+    
+    valid_sources = [s for s in lookup_result.sources if s.get('url') and s.get('title')]
+    if not valid_sources:
+        return
+    
+    with st.expander(f"Sources ({len(valid_sources)} used)", expanded=False):
+        st.caption("Click links to verify the information:")
+        for idx, source in enumerate(valid_sources, 1):
+            # Truncate title if too long
+            title = source['title']
+            if len(title) > 60:
+                title = title[:57] + "..."
+            
+            url = source['url']
+            try:
+                domain = url.split('/')[2] if '://' in url else url.split('/')[0]
+                domain = domain.replace('www.', '')
+            except:
+                domain = "source"
+            
+            st.markdown(f"**{idx}.** [{title}]({url}) `{domain}`")
+
+
+
+
+            
+
 def get_table_dropdown_options(table_name: str, config, existing_data: pd.DataFrame):
 
     options = {}
@@ -258,21 +292,110 @@ def create_table_entry(table_name: str, data: Dict[str, Any], user: str = "syste
 
 
 
+# def render_form_field(field_config, dropdown_options: Dict[str, List[str]], key_suffix: str) -> Any:
+#     """Render a single form field"""
+#     field_key = f"{field_config.name}_{key_suffix}"
+    
+#     default_value = ''
+#     if field_config.name == 'institution_type_layer1' and st.session_state.get('prefill_type1'):
+#         default_value = st.session_state['prefill_type1']
+#     elif field_config.name == 'institution_type_layer2' and st.session_state.get('prefill_type2'):
+#         default_value = st.session_state['prefill_type2']
+#     elif field_config.name == 'institution_type_layer3' and st.session_state.get('prefill_type3'):
+#         default_value = st.session_state['prefill_type3']
+#     elif field_config.name == 'country_parent' and st.session_state.get('prefill_parent'):
+#         default_value = st.session_state['prefill_parent']
+#     elif field_config.name == 'country_sub' and st.session_state.get('prefill_sub'):
+#         default_value = st.session_state['prefill_sub']
+    
+#     if field_config.field_type == 'text':
+#         return st.text_input(
+#             field_config.display_name,
+#             value=default_value,
+#             placeholder=field_config.placeholder or f"Enter {field_config.display_name.lower()}...",
+#             help=field_config.help_text,
+#             key=field_key
+#         )
+    
+#     elif field_config.field_type == 'textarea':
+#         return st.text_area(
+#             field_config.display_name,
+#             value=default_value,
+#             placeholder=field_config.placeholder or f"Enter {field_config.display_name.lower()}...",
+#             help=field_config.help_text,
+#             key=field_key
+#         )
+    
+#     elif field_config.field_type == 'number':
+#         if 'year' in field_config.name.lower():
+#             return st.number_input(
+#                 field_config.display_name,
+#                 help=field_config.help_text,
+#                 key=field_key,
+#                 step=1,
+#                 value=None
+#             )
+#         else:
+#             return st.number_input(
+#                 field_config.display_name,
+#                 help=field_config.help_text,
+#                 key=field_key,
+#                 format="%.6f",
+#                 value=None
+#             )
+    
+#     elif field_config.field_type == 'select':
+#         options = dropdown_options.get(field_config.name, [''])
+#         index = 0
+#         if default_value and default_value in options:
+#             index = options.index(default_value)
+        
+#         return st.selectbox(
+#             field_config.display_name,
+#             options=options,
+#             index=index,
+#             help=field_config.help_text,
+#             key=field_key
+#         )
+    
+#     elif field_config.field_type == 'boolean':
+#         return st.checkbox(
+#             field_config.display_name,
+#             help=field_config.help_text,
+#             key=field_key
+#         )
+    
+#     else:
+#         return st.text_input(
+#             field_config.display_name,
+#             value=default_value,
+#             help=field_config.help_text,
+#             key=field_key
+#         )
+
 def render_form_field(field_config, dropdown_options: Dict[str, List[str]], key_suffix: str) -> Any:
-    """Render a single form field"""
+    """Render a single form field with improved prefill handling"""
     field_key = f"{field_config.name}_{key_suffix}"
     
+    # Check for prefill values from lookup
     default_value = ''
-    if field_config.name == 'institution_type_layer1' and st.session_state.get('prefill_type1'):
-        default_value = st.session_state['prefill_type1']
-    elif field_config.name == 'institution_type_layer2' and st.session_state.get('prefill_type2'):
-        default_value = st.session_state['prefill_type2']
-    elif field_config.name == 'institution_type_layer3' and st.session_state.get('prefill_type3'):
-        default_value = st.session_state['prefill_type3']
-    elif field_config.name == 'country_parent' and st.session_state.get('prefill_parent'):
-        default_value = st.session_state['prefill_parent']
-    elif field_config.name == 'country_sub' and st.session_state.get('prefill_sub'):
-        default_value = st.session_state['prefill_sub']
+    
+    # Handle prefill values more reliably
+    prefill_mapping = {
+        'institution_type_layer1': 'prefill_type1',
+        'institution_type_layer2': 'prefill_type2', 
+        'institution_type_layer3': 'prefill_type3',
+        'country_parent': 'prefill_parent',
+        'country_sub': 'prefill_sub'
+    }
+    
+    prefill_key = prefill_mapping.get(field_config.name)
+    if prefill_key and st.session_state.get(prefill_key):
+        default_value = st.session_state[prefill_key]
+    
+    # Auto-populate year fields with current year if specified
+    if should_auto_populate_year(field_config.name) and not default_value:
+        default_value = CURRENT_YEAR
     
     if field_config.field_type == 'text':
         return st.text_input(
@@ -313,8 +436,15 @@ def render_form_field(field_config, dropdown_options: Dict[str, List[str]], key_
     elif field_config.field_type == 'select':
         options = dropdown_options.get(field_config.name, [''])
         index = 0
-        if default_value and default_value in options:
-            index = options.index(default_value)
+        
+        # Handle prefill value for select fields - make sure it's in the options
+        if default_value:
+            if default_value in options:
+                index = options.index(default_value)
+            else:
+                # Add the prefill value to options if it's not there (ensure it's valid)
+                options = [''] + [default_value] + [opt for opt in options[1:] if opt != default_value]
+                index = 1  # Position of the new default_value
         
         return st.selectbox(
             field_config.display_name,
@@ -338,6 +468,8 @@ def render_form_field(field_config, dropdown_options: Dict[str, List[str]], key_
             help=field_config.help_text,
             key=field_key
         )
+
+        
 
 
 def get_table_reference_data(table_name: str, config):
@@ -778,52 +910,114 @@ def render_unified_single_entry_form(table_name: str):
                     except Exception as e:
                         st.error(f"Lookup failed: {str(e)}")
     
+    # if table_name == 'institution' and st.session_state.get('lookup_result') and not st.session_state.get('lookup_used', False):
+    #     lookup_result = st.session_state['lookup_result']
+    #     confidence = lookup_result.confidence_score
+        
+    #     if confidence >= 0.9:
+    #         st.success(f"High confidence data found ({confidence * 100:.0f}%)")
+    #     elif confidence >= 0.7:
+    #         st.info(f"Moderate confidence data found ({confidence * 100:.0f}%)")
+    #     else:
+    #         st.warning(f"Low confidence data found ({confidence * 100:.0f}%) - Please verify")
+        
+    #     col1, col2 = st.columns(2)
+        
+    #     with col1:
+    #         if lookup_result.institution_type_layer1:
+    #             st.write(f"**Type Layer 1:** {lookup_result.institution_type_layer1}")
+    #         if lookup_result.institution_type_layer2:
+    #             st.write(f"**Type Layer 2:** {lookup_result.institution_type_layer2}")
+    #         if lookup_result.institution_type_layer3:
+    #             st.write(f"**Type Layer 3:** {lookup_result.institution_type_layer3}")
+        
+    #     with col2:
+    #         if lookup_result.parent_country:
+    #             st.write(f"**Parent Country:** {lookup_result.parent_country}")
+    #         if lookup_result.subsidiary_country:
+    #             st.write(f"**Subsidiary Country:** {lookup_result.subsidiary_country}")
+        
+    #     if lookup_result.reasoning:
+    #         with st.expander("Why these values?"):
+    #             st.write(lookup_result.reasoning)
+        
+    #     if lookup_result.sources:
+    #         with st.expander(f"Sources ({len(lookup_result.sources)} sources used)"):
+    #             for source in lookup_result.sources:
+    #                 st.markdown(f"• [{source['title']}]({source['url']})")
+        
+    #     col1, col2, col3 = st.columns([2, 1, 2])
+    #     with col2:
+    #         if st.button("Use These Values", key="use_lookup", type="primary"):
+    #             # Set prefill values
+    #             st.session_state['prefill_type1'] = lookup_result.institution_type_layer1
+    #             st.session_state['prefill_type2'] = lookup_result.institution_type_layer2
+    #             st.session_state['prefill_type3'] = lookup_result.institution_type_layer3
+    #             st.session_state['prefill_parent'] = lookup_result.parent_country
+    #             st.session_state['prefill_sub'] = lookup_result.subsidiary_country
+    #             st.session_state['lookup_used'] = True
+    #             st.rerun()
+
     if table_name == 'institution' and st.session_state.get('lookup_result') and not st.session_state.get('lookup_used', False):
         lookup_result = st.session_state['lookup_result']
         confidence = lookup_result.confidence_score
         
         if confidence >= 0.9:
-            st.success(f"High confidence data found ({confidence * 100:.0f}%)")
+            st.success(f"High confidence match ({confidence * 100:.0f}%)")
         elif confidence >= 0.7:
-            st.info(f"Moderate confidence data found ({confidence * 100:.0f}%)")
+            st.info(f"Good match found ({confidence * 100:.0f}%)")
         else:
-            st.warning(f"Low confidence data found ({confidence * 100:.0f}%) - Please verify")
+            st.warning(f"Low confidence match ({confidence * 100:.0f}%) - Please verify")
         
         col1, col2 = st.columns(2)
         
         with col1:
+            st.markdown("**Institution Details:**")
             if lookup_result.institution_type_layer1:
-                st.write(f"**Type Layer 1:** {lookup_result.institution_type_layer1}")
+                st.write(f"• **Type Layer 1:** {lookup_result.institution_type_layer1}")
             if lookup_result.institution_type_layer2:
-                st.write(f"**Type Layer 2:** {lookup_result.institution_type_layer2}")
+                st.write(f"• **Type Layer 2:** {lookup_result.institution_type_layer2}")
             if lookup_result.institution_type_layer3:
-                st.write(f"**Type Layer 3:** {lookup_result.institution_type_layer3}")
+                st.write(f"• **Type Layer 3:** {lookup_result.institution_type_layer3}")
         
         with col2:
+            st.markdown("**Geographic Details:**")
             if lookup_result.parent_country:
-                st.write(f"**Parent Country:** {lookup_result.parent_country}")
+                st.write(f"• **Parent Country:** {lookup_result.parent_country}")
             if lookup_result.subsidiary_country:
-                st.write(f"**Subsidiary Country:** {lookup_result.subsidiary_country}")
+                st.write(f"• **Subsidiary Country:** {lookup_result.subsidiary_country}")
         
         if lookup_result.reasoning:
-            with st.expander("Why these values?"):
+            with st.expander("Why these values?", expanded=False):
                 st.write(lookup_result.reasoning)
         
-        if lookup_result.sources:
-            with st.expander(f"Sources ({len(lookup_result.sources)} sources used)"):
-                for source in lookup_result.sources:
-                    st.markdown(f"• [{source['title']}]({source['url']})")
+        # Use the new compact source display
+        render_lookup_sources_compact(lookup_result)
         
         col1, col2, col3 = st.columns([2, 1, 2])
         with col2:
-            if st.button("Use These Values", key="use_lookup", type="primary"):
-                # Set prefill values
+            if st.button("Use These Values", key="use_lookup", type="primary", use_container_width=True):
+                # Clear any existing prefill values first
+                for key in ['prefill_type1', 'prefill_type2', 'prefill_type3', 'prefill_parent', 'prefill_sub']:
+                    st.session_state.pop(key, None)
+                
+                # Set new prefill values
                 st.session_state['prefill_type1'] = lookup_result.institution_type_layer1
                 st.session_state['prefill_type2'] = lookup_result.institution_type_layer2
                 st.session_state['prefill_type3'] = lookup_result.institution_type_layer3
                 st.session_state['prefill_parent'] = lookup_result.parent_country
                 st.session_state['prefill_sub'] = lookup_result.subsidiary_country
                 st.session_state['lookup_used'] = True
+                
+                # Force widget updates by clearing relevant widget states
+                widget_keys_to_clear = []
+                for key in st.session_state.keys():
+                    if ('institution_type_layer' in key or 'country_' in key) and ('_req_' in key or '_opt_' in key):
+                        widget_keys_to_clear.append(key)
+                
+                for key in widget_keys_to_clear:
+                    st.session_state.pop(key, None)
+                
                 st.rerun()
     
     st.markdown("---")
@@ -1501,13 +1695,59 @@ def render_enhanced_grid_row(result: ValidationResult, config: TableConfig, sess
                         st.text(current_value or '')
         
         # Lookup button
+        # lookup_col_index = len(display_fields) if len(display_fields) < len(cols) - 1 else len(cols) - 2
+        # with cols[lookup_col_index]:
+        #     if table_name == 'institution':
+        #         if st.button("🔍", key=f"lookup_btn_{result.row_index}_{session_key}", help="Auto-lookup"):
+        #             run_single_lookup(result, table_name, session_key)
+        #     else:
+        #         st.markdown("")
+        # Lookup button and source display
         lookup_col_index = len(display_fields) if len(display_fields) < len(cols) - 1 else len(cols) - 2
         with cols[lookup_col_index]:
             if table_name == 'institution':
-                if st.button("🔍", key=f"lookup_btn_{result.row_index}_{session_key}", help="Auto-lookup"):
-                    run_single_lookup(result, table_name, session_key)
+                # Create two sub-columns for lookup button and source info
+                button_col, info_col = st.columns([1, 1])
+                
+                with button_col:
+                    if st.button("🔍", key=f"lookup_btn_{result.row_index}_{session_key}", help="Auto-lookup"):
+                        run_single_lookup(result, table_name, session_key, existing_data)
+                
+                # Show lookup info if results exist
+                with info_col:
+                    if lookup_result and lookup_result.sources:
+                        # Use popover for compact source display
+                        if hasattr(st, 'popover'):
+                            with st.popover("📋", help=f"View {len(lookup_result.sources)} sources"):
+                                st.caption("**Sources used for lookup:**")
+                                for idx, source in enumerate(lookup_result.sources[:3], 1):  # Show top 3
+                                    title = source.get('title', 'Source')
+                                    if len(title) > 40:
+                                        title = title[:37] + "..."
+                                    url = source.get('url', '#')
+                                    st.markdown(f"[{idx}. {title}]({url})")
+                                
+                                if len(lookup_result.sources) > 3:
+                                    st.caption(f"... and {len(lookup_result.sources) - 3} more sources")
+                                
+                                confidence = getattr(lookup_result, 'confidence_score', None)
+                                if confidence:
+                                    st.caption(f"Confidence: {confidence*100:.0f}%")
+                        else:
+                            # Fallback for older Streamlit versions - use a small button
+                            if st.button("📋", key=f"sources_btn_{result.row_index}_{session_key}", 
+                                       help=f"Click to see {len(lookup_result.sources)} sources"):
+                                st.session_state[f'show_sources_{result.row_index}_{session_key}'] = True
+                                st.rerun()
+                    elif lookup_result:
+                        # Show confidence without sources
+                        confidence = getattr(lookup_result, 'confidence_score', None)
+                        if confidence:
+                            confidence_color = "🟢" if confidence >= 0.8 else "🟡" if confidence >= 0.6 else "🔴"
+                            st.caption(f"{confidence_color} {confidence*100:.0f}%")
             else:
                 st.markdown("")
+
         
         # Action button
         action_col_index = len(display_fields) + 1 if len(display_fields) < len(cols) - 1 else len(cols) - 1

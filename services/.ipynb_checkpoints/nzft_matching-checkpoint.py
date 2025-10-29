@@ -481,7 +481,7 @@ def generate_final_results(original_df: pd.DataFrame, match_results: List[MatchR
 
 
 def reset_nzft_session():
-    """Reset NZFT session state"""
+    """Reset session state"""
     for key in ['nzft_uploaded_df', 'nzft_match_results', 'nzft_user_selections', 
                 'nzft_exact_confirmations', 'nzft_final_df', 'nzft_last_file']:
         if key in st.session_state:

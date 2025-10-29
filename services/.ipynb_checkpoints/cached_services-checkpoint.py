@@ -22,7 +22,7 @@ def get_institution_service():
     return InstitutionService()
 
 
-@st.cache_resource(ttl=3600)  # Refresh valid countries every hour
+@st.cache_resource(ttl=14400)  # Refreshes every 4 hours, not super necessary
 def get_lookup_service():
     """
     Cached lookup service with valid countries

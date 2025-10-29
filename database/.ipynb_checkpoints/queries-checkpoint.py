@@ -31,7 +31,6 @@ class QueryService:
         """Check if table exists"""
         return DatabaseConnection.check_table_exists(table_name)
     
-    # Backward compatibility methods for institution table
     @staticmethod
     def get_all_institutions() -> pd.DataFrame:
         """Retrieve all institutions from the database"""
