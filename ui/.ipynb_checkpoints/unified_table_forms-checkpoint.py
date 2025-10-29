@@ -997,7 +997,18 @@ def render_unified_single_entry_form(table_name: str):
         col1, col2, col3 = st.columns([2, 1, 2])
         with col2:
             if st.button("Use These Values", key="use_lookup", type="primary", use_container_width=True):
-                # Clear any existing prefill values first
+                # Clear ALL widget states for this table to force recreation
+                keys_to_clear = []
+                for key in list(st.session_state.keys()):
+                    if (key.startswith(f"{table_name}_req_") or 
+                        key.startswith(f"{table_name}_opt_") or 
+                        key.startswith(f"{table_name}_adv_")):
+                        keys_to_clear.append(key)
+                
+                for key in keys_to_clear:
+                    st.session_state.pop(key, None)
+                
+                # Clear any existing prefill values
                 for key in ['prefill_type1', 'prefill_type2', 'prefill_type3', 'prefill_parent', 'prefill_sub']:
                     st.session_state.pop(key, None)
                 
@@ -1009,15 +1020,7 @@ def render_unified_single_entry_form(table_name: str):
                 st.session_state['prefill_sub'] = lookup_result.subsidiary_country
                 st.session_state['lookup_used'] = True
                 
-                # Force widget updates by clearing relevant widget states
-                widget_keys_to_clear = []
-                for key in st.session_state.keys():
-                    if ('institution_type_layer' in key or 'country_' in key) and ('_req_' in key or '_opt_' in key):
-                        widget_keys_to_clear.append(key)
-                
-                for key in widget_keys_to_clear:
-                    st.session_state.pop(key, None)
-                
+                # Force immediate refresh
                 st.rerun()
     
     st.markdown("---")
