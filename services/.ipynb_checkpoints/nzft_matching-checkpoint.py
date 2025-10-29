@@ -4,33 +4,83 @@ import io
 from typing import List, Dict, Tuple, Optional
 from dataclasses import dataclass
 import re
+import boto3
+from botocore.exceptions import ClientError
 
-from database.cached_queries import get_table_data_cached
 from utils.fuzzy_matching import get_fitted_matcher
 from utils.text_processing import TextProcessor
+from config import AWS_REGION, S3_BUCKET, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY
 
 
 @dataclass
 class MatchResult:
-    """Result of matching process for one institution"""
     original_name: str
     row_index: int
     match_type: str  # 'exact', 'fuzzy', 'none'
-    exact_match: Optional[str] = None
-    fuzzy_matches: List[Tuple[str, float, str]] = None  # (name, score, country)
-    selected_match: Optional[str] = None
+    exact_match: Optional[Dict[str, str]] = None  # {nzft_id, entity, entity_clean, country_cpi}
+    fuzzy_matches: List[Tuple[str, float, Dict[str, str]]] = None  # (display_name, score, {nzft_id, entity, entity_clean, country_cpi})
+    selected_match: Optional[Dict[str, str]] = None
+
+
+@st.cache_data(ttl=14400)  # Cache for 4 hours, could honestly be longer
+def load_nzft_data_cached() -> Optional[pd.DataFrame]:
+    """Loads NZFT data from AWS as a csv file
+    This assumes the nzft file will have the same column names that the current version does
+    """
+    try:
+        s3_client = boto3.client(
+            's3',
+            region_name=AWS_REGION,
+            aws_access_key_id=AWS_ACCESS_KEY_ID,
+            aws_secret_access_key=AWS_SECRET_ACCESS_KEY
+        )
+        
+        s3_key = 'auxiliary-data/reference-data/reference-db-2/nzft.csv'
+        
+        obj = s3_client.get_object(Bucket=S3_BUCKET, Key=s3_key)
+        nzft_df = pd.read_csv(obj['Body'])
+        
+        required_columns = ['nzft_id', 'entity', 'entity_clean', 'country_cpi']
+        missing_columns = [col for col in required_columns if col not in nzft_df.columns]
+        
+        if missing_columns:
+            st.error(f"NZFT data missing required columns: {missing_columns}")
+            return None
+        
+        nzft_df['entity'] = nzft_df['entity'].fillna('').astype(str)
+        nzft_df['entity_clean'] = nzft_df['entity_clean'].fillna('').astype(str)
+        nzft_df['country_cpi'] = nzft_df['country_cpi'].fillna('').astype(str)
+        nzft_df['nzft_id'] = nzft_df['nzft_id'].fillna('').astype(str)
+        
+        return nzft_df
+        
+    except ClientError as e:
+        if e.response['Error']['Code'] == 'NoSuchKey':
+            st.error(f"NZFT file not found at s3://{S3_BUCKET}/{s3_key}")
+        else:
+            st.error(f"Error accessing S3: {str(e)}")
+        return None
+    except Exception as e:
+        st.error(f"Error loading NZFT data: {str(e)}")
+        return None
 
 
 class NZFTMatcher:
-    """Handles NZFT institution matching logic"""
+    """Runs exact matching and fuzzy matching on normalized versions of hte text"""
     
     def __init__(self):
-        self.target_column = 'institution_cpi'  # Make this configurable, so you can change the column you want to match to
+        self.target_column = 'institution'  # Default column name in the uploaded file, can change if there's something else that's commonly used
+        self.nzft_df = None
         self.suffix_patterns = [
             r'\s+(llc|ltd|limited|inc|incorporated|corp|corporation)\.?$',
             r'\s+(gmbh|sarl|srl|pvt|pty|pte|bv|nv|ag|sa|sas|ab)\.?$',
             r'\s+(plc|public\s+limited\s+company|se|oyj|spa)\.?$'
         ]
+    
+    def load_nzft_data(self) -> bool:
+        """Load NZFT reference data from fixed S3 location"""
+        self.nzft_df = load_nzft_data_cached()
+        return self.nzft_df is not None
     
     def normalize_for_matching(self, name: str) -> str:
         """Normalize name for exact matching (includes suffix removal)"""
@@ -39,50 +89,64 @@ class NZFTMatcher:
         
         normalized = TextProcessor.normalize_institution_name(name).lower().strip()
         
-        # Try removing common suffixes for matching
         for pattern in self.suffix_patterns:
             normalized = re.sub(pattern, '', normalized, flags=re.IGNORECASE).strip()
         
         return normalized
     
-    def find_exact_matches(self, input_names: List[str], institution_df: pd.DataFrame) -> Dict[int, str]:
-        """Find exact matches (including with suffix variations)"""
+    def find_exact_matches(self, input_names: List[str]) -> Dict[int, Dict[str, str]]:
+        """Find exact matches against both entity and entity_clean columns"""
         exact_matches = {}
         
-        if institution_df.empty or 'institution_cpi' not in institution_df.columns:
+        if self.nzft_df is None or self.nzft_df.empty:
             return exact_matches
         
-        # Create lookup dict for institution names
-        institution_lookup = {}
-        for _, row in institution_df.iterrows():
-            inst_name = str(row['institution_cpi']).strip()
-            normalized = self.normalize_for_matching(inst_name)
-            if normalized:
-                institution_lookup[normalized] = inst_name
+        # Create lookup dictionaries for both entity and entity_clean
+        entity_lookup = {}
+        entity_clean_lookup = {}
         
-        # Check each input name
+        for _, row in self.nzft_df.iterrows():
+            match_data = {
+                'nzft_id': str(row['nzft_id']),
+                'entity': str(row['entity']),
+                'entity_clean': str(row['entity_clean']),
+                'country_cpi': str(row['country_cpi'])
+            }
+            
+            entity_normalized = self.normalize_for_matching(str(row['entity']))
+            if entity_normalized:
+                entity_lookup[entity_normalized] = match_data
+            
+            entity_clean_normalized = self.normalize_for_matching(str(row['entity_clean']))
+            if entity_clean_normalized:
+                entity_clean_lookup[entity_clean_normalized] = match_data
+        
         for idx, input_name in enumerate(input_names):
             if not input_name:
                 continue
             
             input_normalized = self.normalize_for_matching(input_name)
             
-            # Check for exact match (including suffix variations)
-            if input_normalized in institution_lookup:
-                exact_matches[idx] = institution_lookup[input_normalized]
+            if input_normalized in entity_lookup:
+                exact_matches[idx] = entity_lookup[input_normalized]
+            elif input_normalized in entity_clean_lookup:
+                exact_matches[idx] = entity_clean_lookup[input_normalized]
         
         return exact_matches
     
-    def find_fuzzy_matches(self, input_names: List[str], institution_df: pd.DataFrame, 
-                          exclude_exact: Dict[int, str]) -> Dict[int, List[Tuple[str, float, str]]]:
+    def find_fuzzy_matches(self, input_names: List[str], exclude_exact: Dict[int, Dict[str, str]]) -> Dict[int, List[Tuple[str, float, Dict[str, str]]]]:
         """Find fuzzy matches for non-exact entries"""
         fuzzy_matches = {}
         
-        if institution_df.empty:
+        if self.nzft_df is None or self.nzft_df.empty:
             return fuzzy_matches
         
         try:
-            matcher = get_fitted_matcher(institution_df, threshold=0.70)  # Lower threshold for more matches
+            matcher_df = pd.DataFrame()
+            matcher_df['institution_cpi'] = self.nzft_df['entity'].fillna('') + ' | ' + self.nzft_df['entity_clean'].fillna('')
+            matcher_df['country_sub'] = self.nzft_df['country_cpi']
+            
+            matcher = get_fitted_matcher(matcher_df, threshold=0.70)
             
             for idx, input_name in enumerate(input_names):
                 if idx in exclude_exact or not input_name:
@@ -90,38 +154,53 @@ class NZFTMatcher:
                 
                 matches = matcher.find_similar_institutions(
                     query=input_name,
-                    institution_df=institution_df,
+                    institution_df=matcher_df,
                     limit=5,
                     tfidf_top_k=50
                 )
                 
                 if matches:
                     enhanced_matches = []
-                    for name, score in matches:
-                        country = ""
-                        matching_row = institution_df[institution_df['institution_cpi'] == name]
-                        if not matching_row.empty:
-                            country = str(matching_row.iloc[0].get('country_sub', '')).strip()
-                        
-                        enhanced_matches.append((name, score, country))
+                    for combined_name, score in matches:
+                        # Find the original NZFT row that corresponds to this match
+                        for _, nzft_row in self.nzft_df.iterrows():
+                            expected_combined = str(nzft_row['entity']) + ' | ' + str(nzft_row['entity_clean'])
+                            if expected_combined == combined_name:
+                                match_data = {
+                                    'nzft_id': str(nzft_row['nzft_id']),
+                                    'entity': str(nzft_row['entity']),
+                                    'entity_clean': str(nzft_row['entity_clean']),
+                                    'country_cpi': str(nzft_row['country_cpi'])
+                                }
+                                
+                                # Create display name for UI
+                                display_name = f"{nzft_row['entity']} / {nzft_row['entity_clean']}"
+                                
+                                enhanced_matches.append((display_name, score, match_data))
+                                break
                     
                     fuzzy_matches[idx] = enhanced_matches
-            
+        
         except Exception as e:
             st.error(f"Error in fuzzy matching: {str(e)}")
         
         return fuzzy_matches
-    
-    def process_upload(self, df: pd.DataFrame, institution_df: pd.DataFrame) -> List[MatchResult]:
-        """Process uploaded file and find all matches"""
+
+
+
+        
+    def process_upload(self, df: pd.DataFrame) -> List[MatchResult]:
+        """Process the file uploaded"""
         if self.target_column not in df.columns:
             raise ValueError(f"Required column '{self.target_column}' not found in uploaded file")
         
+        if self.nzft_df is None:
+            raise ValueError("NZFT reference data not loaded. Please try refreshing the page.")
+        
         input_names = df[self.target_column].fillna('').astype(str).tolist()
         
-        exact_matches = self.find_exact_matches(input_names, institution_df)
-        
-        fuzzy_matches = self.find_fuzzy_matches(input_names, institution_df, exact_matches)
+        exact_matches = self.find_exact_matches(input_names)
+        fuzzy_matches = self.find_fuzzy_matches(input_names, exact_matches)
         
         results = []
         for idx, name in enumerate(input_names):
@@ -152,11 +231,11 @@ class NZFTMatcher:
 
 
 def render_nzft_page():
-    """Render the NZFT institution matching page"""
     st.header("NZFT Institution Matching")
-    st.markdown("Upload a file with institutions to match against the database")
+    st.markdown("Upload a file with institutions to match against NZFT reference data")
     st.markdown("---")
     
+    # Initialize session state
     if 'nzft_uploaded_df' not in st.session_state:
         st.session_state['nzft_uploaded_df'] = None
     if 'nzft_match_results' not in st.session_state:
@@ -168,15 +247,34 @@ def render_nzft_page():
     
     matcher = NZFTMatcher()
     
-    with st.expander("Configuration"):
+    # Load NZFT data automatically
+    with st.spinner("Loading NZFT reference data..."):
+        try:
+            if matcher.load_nzft_data() and matcher.nzft_df is not None:
+                st.success(f"NZFT reference data loaded: {len(matcher.nzft_df)} entities")
+                
+                with st.expander("Preview NZFT Reference Data"):
+                    st.dataframe(matcher.nzft_df.head(10), use_container_width=True)
+            else:
+                st.error("Failed to load NZFT reference data. Please check your S3 configuration and file location.")
+                st.info(f"Expected location: s3://{S3_BUCKET}/auxiliary-data/reference-data/reference-db-2/nzft.csv")
+                return
+        except Exception as e:
+            st.error(f"Error loading NZFT data: {str(e)}")
+            st.info(f"Expected location: s3://{S3_BUCKET}/auxiliary-data/reference-data/reference-db-2/nzft.csv")
+            return
+    
+    st.markdown("---")
+    
+    with st.expander("Name of institution column in uploaded file"):
         target_column = st.text_input(
             "Target Column Name",
             value=matcher.target_column,
-            help="The column name in your upload file that contains institution names"
+            help="The column name in your upload file that contains institution names to match"
         )
         matcher.target_column = target_column
     
-    st.subheader("1. Upload File")
+    st.subheader("1. Upload File with Institutions to Match")
     uploaded_file = st.file_uploader(
         "Choose CSV or Excel file with institutions to match",
         type=['csv', 'xlsx', 'xls'],
@@ -214,13 +312,14 @@ def render_nzft_page():
         st.dataframe(df.head(10), use_container_width=True)
         st.info(f"Loaded {len(df)} rows with {len(df.columns)} columns")
         
+        # Process Matches
         if st.session_state['nzft_match_results'] is None:
-            with st.spinner("Finding matches in institution database..."):
+            with st.spinner("Finding matches in NZFT database..."):
                 try:
-                    institution_df = get_table_data_cached('institution', limit=None)
-                    match_results = matcher.process_upload(df, institution_df)
+                    match_results = matcher.process_upload(df)
                     st.session_state['nzft_match_results'] = match_results
                     
+                    # Auto-confirm exact matches
                     for result in match_results:
                         if result.match_type == 'exact':
                             st.session_state['nzft_exact_confirmations'][result.row_index] = result.exact_match
@@ -248,21 +347,27 @@ def render_nzft_page():
         with col4:
             st.metric("No Matches", len(no_match_results))
         
+        # Show exact matches
         if exact_results:
             st.markdown("---")
             with st.expander(f"Exact Matches ({len(exact_results)}) - Automatically kept"):
-                st.info("These institutions were found as exact matches (including suffix variations) and will be automatically included in the results")
+                st.info("These institutions were found as exact matches and will be automatically included in the results")
                 
                 exact_data = []
                 for result in exact_results:
+                    match_data = result.exact_match
                     exact_data.append({
                         'Original Name': result.original_name,
-                        'Database Match': result.exact_match
+                        'NZFT Entity': match_data['entity'],
+                        'NZFT Entity Clean': match_data['entity_clean'],
+                        'Country': match_data['country_cpi'],
+                        'NZFT ID': match_data['nzft_id']
                     })
                 
                 exact_df = pd.DataFrame(exact_data)
                 st.dataframe(exact_df, use_container_width=True, hide_index=True)
         
+        # Show fuzzy matches for user review
         if fuzzy_results:
             st.markdown("---")
             st.subheader("Fuzzy Matches")
@@ -278,11 +383,11 @@ def render_nzft_page():
                         options = ["No match"]
                         option_values = [None]
                         
-                        for name, score, country in result.fuzzy_matches:
-                            country_str = f" ({country})" if country else ""
-                            option_text = f"{name}{country_str} - {score*100:.1f}% match"
+                        for display_name, score, match_data in result.fuzzy_matches:
+                            country_str = f" ({match_data['country_cpi']})" if match_data['country_cpi'] else ""
+                            option_text = f"{display_name}{country_str} - {score*100:.1f}% match"
                             options.append(option_text)
-                            option_values.append(name)
+                            option_values.append(match_data)
                         
                         current_selection = st.session_state['nzft_user_selections'].get(result.row_index)
                         try:
@@ -306,11 +411,13 @@ def render_nzft_page():
                     
                     st.markdown("---")
         
+        # Show no matches
         if no_match_results:
             with st.expander(f"No Matches Found ({len(no_match_results)})"):
                 for result in no_match_results:
                     st.text(f"• {result.original_name}")
         
+        # Generate Final Results
         st.markdown("---")
         st.subheader("3. Generate Results")
         
@@ -321,7 +428,7 @@ def render_nzft_page():
             st.subheader("Final Results Preview")
             st.dataframe(final_df, use_container_width=True)
             
-            matched_count = (final_df['match'] != '').sum()
+            matched_count = (final_df['nzft_id'] != '').sum()
             st.success(f"Processing complete! {matched_count} out of {len(final_df)} institutions matched.")
             
             csv_buffer = io.StringIO()
@@ -337,25 +444,38 @@ def render_nzft_page():
 
 
 def generate_final_results(original_df: pd.DataFrame, match_results: List[MatchResult], target_column: str) -> pd.DataFrame:
-    """Generate final DataFrame with match column"""
+    """Generate final DataFrame with separate nzft_id, entity, and entity_clean columns"""
     final_df = original_df.copy()
     
     target_col_index = final_df.columns.get_loc(target_column)
     
-    match_values = [''] * len(final_df)
+    # Initialize the three new columns
+    nzft_ids = [''] * len(final_df)
+    entities = [''] * len(final_df)
+    entity_cleans = [''] * len(final_df)
     
     for result in match_results:
+        match_data = None
+        
         if result.match_type == 'exact' and result.exact_match:
             confirmed_match = st.session_state['nzft_exact_confirmations'].get(result.row_index)
             if confirmed_match:
-                match_values[result.row_index] = confirmed_match
+                match_data = confirmed_match
         
         elif result.match_type == 'fuzzy':
             selected_match = st.session_state['nzft_user_selections'].get(result.row_index)
             if selected_match:
-                match_values[result.row_index] = selected_match
+                match_data = selected_match
+        
+        if match_data:
+            nzft_ids[result.row_index] = match_data.get('nzft_id', '')
+            entities[result.row_index] = match_data.get('entity', '')
+            entity_cleans[result.row_index] = match_data.get('entity_clean', '')
     
-    final_df.insert(target_col_index + 1, 'match', match_values)
+    # Insert the three new columns after the target column
+    final_df.insert(target_col_index + 1, 'nzft_id', nzft_ids)
+    final_df.insert(target_col_index + 2, 'entity', entities)
+    final_df.insert(target_col_index + 3, 'entity_clean', entity_cleans)
     
     return final_df
 
