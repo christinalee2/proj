@@ -133,7 +133,6 @@ def get_table_dropdown_options(table_name: str, config, existing_data: pd.DataFr
                         options[field_config.name] = ['']
                 return options
         
-        # Getting values for select optinos
         for field_config in config.fields:
             if field_config.field_type == 'select':
                 field_name = field_config.name
@@ -165,7 +164,6 @@ def get_table_dropdown_options(table_name: str, config, existing_data: pd.DataFr
                 
                 elif field_name in existing_data.columns:
                     unique_values = existing_data[field_name].dropna().unique()
-                    # Convert to strings and sort
                     unique_strings = sorted([str(v) for v in unique_values if str(v).strip()])
                     options[field_name] = [''] + unique_strings
                 else:
@@ -175,7 +173,6 @@ def get_table_dropdown_options(table_name: str, config, existing_data: pd.DataFr
         
     except Exception as e:
         print(f"Error getting dropdown options for {table_name}: {e}")
-        # Return empty options for all select fields
         for field_config in config.fields:
             if field_config.field_type == 'select':
                 options[field_config.name] = ['']
@@ -292,95 +289,15 @@ def create_table_entry(table_name: str, data: Dict[str, Any], user: str = "syste
 
 
 
-# def render_form_field(field_config, dropdown_options: Dict[str, List[str]], key_suffix: str) -> Any:
-#     """Render a single form field"""
-#     field_key = f"{field_config.name}_{key_suffix}"
-    
-#     default_value = ''
-#     if field_config.name == 'institution_type_layer1' and st.session_state.get('prefill_type1'):
-#         default_value = st.session_state['prefill_type1']
-#     elif field_config.name == 'institution_type_layer2' and st.session_state.get('prefill_type2'):
-#         default_value = st.session_state['prefill_type2']
-#     elif field_config.name == 'institution_type_layer3' and st.session_state.get('prefill_type3'):
-#         default_value = st.session_state['prefill_type3']
-#     elif field_config.name == 'country_parent' and st.session_state.get('prefill_parent'):
-#         default_value = st.session_state['prefill_parent']
-#     elif field_config.name == 'country_sub' and st.session_state.get('prefill_sub'):
-#         default_value = st.session_state['prefill_sub']
-    
-#     if field_config.field_type == 'text':
-#         return st.text_input(
-#             field_config.display_name,
-#             value=default_value,
-#             placeholder=field_config.placeholder or f"Enter {field_config.display_name.lower()}...",
-#             help=field_config.help_text,
-#             key=field_key
-#         )
-    
-#     elif field_config.field_type == 'textarea':
-#         return st.text_area(
-#             field_config.display_name,
-#             value=default_value,
-#             placeholder=field_config.placeholder or f"Enter {field_config.display_name.lower()}...",
-#             help=field_config.help_text,
-#             key=field_key
-#         )
-    
-#     elif field_config.field_type == 'number':
-#         if 'year' in field_config.name.lower():
-#             return st.number_input(
-#                 field_config.display_name,
-#                 help=field_config.help_text,
-#                 key=field_key,
-#                 step=1,
-#                 value=None
-#             )
-#         else:
-#             return st.number_input(
-#                 field_config.display_name,
-#                 help=field_config.help_text,
-#                 key=field_key,
-#                 format="%.6f",
-#                 value=None
-#             )
-    
-#     elif field_config.field_type == 'select':
-#         options = dropdown_options.get(field_config.name, [''])
-#         index = 0
-#         if default_value and default_value in options:
-#             index = options.index(default_value)
-        
-#         return st.selectbox(
-#             field_config.display_name,
-#             options=options,
-#             index=index,
-#             help=field_config.help_text,
-#             key=field_key
-#         )
-    
-#     elif field_config.field_type == 'boolean':
-#         return st.checkbox(
-#             field_config.display_name,
-#             help=field_config.help_text,
-#             key=field_key
-#         )
-    
-#     else:
-#         return st.text_input(
-#             field_config.display_name,
-#             value=default_value,
-#             help=field_config.help_text,
-#             key=field_key
-#         )
+
+
 
 def render_form_field(field_config, dropdown_options: Dict[str, List[str]], key_suffix: str) -> Any:
     """Render a single form field with improved prefill handling"""
     field_key = f"{field_config.name}_{key_suffix}"
     
-    # Check for prefill values from lookup
     default_value = ''
     
-    # Handle prefill values more reliably
     prefill_mapping = {
         'institution_type_layer1': 'prefill_type1',
         'institution_type_layer2': 'prefill_type2', 
@@ -393,7 +310,6 @@ def render_form_field(field_config, dropdown_options: Dict[str, List[str]], key_
     if prefill_key and st.session_state.get(prefill_key):
         default_value = st.session_state[prefill_key]
     
-    # Auto-populate year fields with current year if specified
     if should_auto_populate_year(field_config.name) and not default_value:
         default_value = CURRENT_YEAR
     
@@ -437,14 +353,12 @@ def render_form_field(field_config, dropdown_options: Dict[str, List[str]], key_
         options = dropdown_options.get(field_config.name, [''])
         index = 0
         
-        # Handle prefill value for select fields - make sure it's in the options
         if default_value:
             if default_value in options:
                 index = options.index(default_value)
             else:
-                # Add the prefill value to options if it's not there (ensure it's valid)
                 options = [''] + [default_value] + [opt for opt in options[1:] if opt != default_value]
-                index = 1  # Position of the new default_value
+                index = 1  
         
         return st.selectbox(
             field_config.display_name,
@@ -526,9 +440,6 @@ def render_unified_single_entry_form(table_name: str):
     st.markdown(config.description)
     st.markdown("---")
     
-    # existing_data = get_table_data_cached(table_name, limit=None)
-    # dropdown_options = get_table_dropdown_options(table_name, config)
-
     reference_data = get_table_reference_data(table_name, config)
     existing_data = reference_data['existing_data']
     dropdown_options = reference_data['dropdown_options']
@@ -548,7 +459,6 @@ def render_unified_single_entry_form(table_name: str):
             key=f"{table_name}_primary"
         )
 
-        #################################################
         if 'last_primary_value' not in st.session_state:
             st.session_state['last_primary_value'] = ''
         
@@ -561,84 +471,31 @@ def render_unified_single_entry_form(table_name: str):
             for key in keys_to_clear:
                 st.session_state.pop(key, None)
             
-            # Clear expander states for old institution
             old_expander_key = f"hierarchy_expander_opened_{st.session_state['last_primary_value']}"
             old_new_inst_expander_key = f"new_hierarchy_expander_opened_{st.session_state['last_primary_value']}"
             st.session_state.pop(old_expander_key, None)
             st.session_state.pop(old_new_inst_expander_key, None)
             
-            # Update the last primary value
             st.session_state['last_primary_value'] = primary_value
-            ##################################################################################################
             
         
         if primary_value and len(str(primary_value).strip()) >= 3:
             
-            # exact = check_exact_duplicate(primary_value, existing_data, primary_field, standardization_data)
-            # if exact:
-            #     st.warning(f"'{exact}' already exists in the {config.display_name.lower()} table.")
 
-            #############################
             exact = check_exact_duplicate(primary_value, existing_data, primary_field, standardization_data)
             if exact:
                 st.error(f"'{exact}' already exists in the {config.display_name.lower()} table.")
                 
-                # Set a flag for hierarchy form to use exact match
                 st.session_state['hierarchy_match_name'] = exact
                 st.session_state['hierarchy_match_type'] = 'exact'
                 st.session_state['show_hierarchy_form'] = True
-                ###########################
-            # exact = check_exact_duplicate(primary_value, existing_data, primary_field, standardization_data)
-            # if exact:
-            #     st.error(f"'{exact}' already exists in the {config.display_name.lower()} table.")
-                
-            #     # Add hierarchy option for institutions
-            #     if table_name == 'institution':
-            #         hierarchy_service = HierarchyService()
-            #         hierarchy_data = render_hierarchy_options_for_duplicates(
-            #             institution_name=primary_value,
-            #             duplicate_name=exact,
-            #             existing_institutions=existing_data,
-            #             form_key="duplicate_hierarchy"
-            #         )
-                    
-            #         if hierarchy_data:
-            #             if hierarchy_data.get('cancel'):
-            #                 st.info("Hierarchy creation cancelled")
-            #             else:
-            #                 # Create hierarchy relationship
-            #                 result = hierarchy_service.create_hierarchy_entry(
-            #                     parent_institution=hierarchy_data['parent_institution'],
-            #                     child_institution=hierarchy_data['child_institution'],
-            #                     percent_ownership=hierarchy_data.get('percent_ownership'),
-            #                     relationship_type=hierarchy_data.get('relationship_type'),
-            #                     user=st.session_state.get('username', 'analyst')
-            #                 )
-                            
-            #                 if result['success']:
-            #                     st.success("Hierarchy relationship created successfully!")
-            #                     st.cache_data.clear()
-            #                     # Clear hierarchy session state
-            #                     keys_to_clear = [k for k in st.session_state.keys() if 'hierarchy' in k.lower()]
-            #                     for key in keys_to_clear:
-            #                         if key in st.session_state:
-            #                             del st.session_state[key]
-            #                     st.rerun()
-            #                 else:
-            #                     st.error(f"Failed to create hierarchy: {result['message']}")
-            
-            #             #############################################
-            
+              
             try:
                 fuzzy = check_fuzzy_matches(primary_value, existing_data, primary_field)
                 if fuzzy:
                     st.info(f"Found {len(fuzzy)} similar {config.display_name.lower()}(s)")
                     st.caption("Similar entries found. Click 'Keep' to use your entry and create a standardization mapping.")
 
-                    # #############################################
-                    # st.session_state['hierarchy_match_name'] = fuzzy[0][0]  # Best match
-                    # st.session_state['hierarchy_match_type'] = 'fuzzy'
-                    # #############################################
         
                     for i, (name, score) in enumerate(fuzzy):
                         col1, col2 = st.columns([4, 1])
@@ -657,23 +514,7 @@ def render_unified_single_entry_form(table_name: str):
                             
                             detail_str = f" ({', '.join(details)})" if details else ""
                             st.text(f"• {name}{detail_str} - {score * 100:.1f}% match")
-                        
-                        # with col2:
-                        #     if st.button("Keep", key=f"keep_{table_name}_{i}", help=f"Use '{primary_value}' and map to '{name}'"):
-                        #         if table_name == 'institution':
-                        #             result = standardization_service.process_keep_institution(primary_value, name, standardization_data, existing_data)
-                        #         elif table_name == 'geography':
-                        #             result = standardization_service.process_keep_geography(primary_value, name)
-                        #         else:
-                        #             result = {'success': False, 'message': 'Keep functionality not available for this table'}
-                                
-                        #         if result['success']:
-                        #             st.success(result['message'])
-                        #             st.info(f"Added to standardization table.")
-                        #         else:
-                        #             st.error(result['message'])
-                                
-                        #         st.rerun()
+                       
                         with col2:
                             if st.button("Keep", key=f"keep_{table_name}_{i}", help=f"Use '{primary_value}' and map to '{name}'"):
                                 if table_name == 'institution':
@@ -702,16 +543,13 @@ def render_unified_single_entry_form(table_name: str):
             except Exception as e:
                 st.error(f"Error checking for similar entries: {str(e)}")
 
-            ############################################
-            # Unified hierarchy form for exact duplicates and fuzzy matches
+        
             if table_name == 'institution' and st.session_state.get('hierarchy_match_name'):
                 match_name = st.session_state['hierarchy_match_name']
                 match_type = st.session_state.get('hierarchy_match_type', 'unknown')
 
-                # Session state key for tracking if expander has been opened
                 expander_state_key = f"hierarchy_expander_opened_{primary_value}"
                 
-                # Initialize expander state - starts closed
                 if expander_state_key not in st.session_state:
                     st.session_state[expander_state_key] = False
         
@@ -727,11 +565,9 @@ def render_unified_single_entry_form(table_name: str):
                     elif match_type == 'kept':
                         st.info(f"Create a parent-child relationship with the kept institution: {match_name}")
                     
-                    # Initialize session state for relationship choice
                     if "match_hierarchy_choice" not in st.session_state:
                         st.session_state["match_hierarchy_choice"] = "As Parent Institution"
                     
-                    # Radio button for relationship type
                     relationship_choice = st.radio(
                         f"How should '{match_name}' be used in the hierarchy?",
                         ["As Parent Institution", "As Child Institution"],
@@ -740,13 +576,11 @@ def render_unified_single_entry_form(table_name: str):
                         help="Choose whether the matched institution should be parent or child"
                     )
                     
-                    # Update session state
                     st.session_state["match_hierarchy_choice"] = relationship_choice
                                         
                     if relationship_choice == "As Parent Institution":
                         st.write(f"**{match_name}** will be the PARENT institution")
                         
-                        # Search for child institution
                         child_name, child_id = render_institution_search_widget(
                             key="match_child",
                             label="Select Child Institution",
@@ -754,7 +588,6 @@ def render_unified_single_entry_form(table_name: str):
                             help_text="Institution that will be owned/controlled by this parent"
                         )
                         
-                        # Always show form fields
                         col1, col2 = st.columns(2)
                         
                         with col1:
@@ -784,7 +617,6 @@ def render_unified_single_entry_form(table_name: str):
                             help="Describe the type of relationship"
                         )
                         
-                        # Show create button only if child is selected
                         if child_name and child_id:
                             if st.button("Create Relationship", key="match_submit"):
                                 hierarchy_service = HierarchyService()
@@ -801,7 +633,6 @@ def render_unified_single_entry_form(table_name: str):
                                 if result['success']:
                                     st.success("Hierarchy relationship created successfully!")
                                     st.cache_data.clear()
-                                    # Clear hierarchy session state
                                     for key in ['hierarchy_match_name', 'hierarchy_match_type', 'match_hierarchy_choice']:
                                         st.session_state.pop(key, None)
                                     keys_to_clear = [k for k in st.session_state.keys() if 'hierarchy' in k.lower() or 'match_' in k]
@@ -824,7 +655,6 @@ def render_unified_single_entry_form(table_name: str):
                             help_text="Institution that owns/controls this child"
                         )
                         
-                        # Always show form fields
                         col1, col2 = st.columns(2)
                         
                         with col1:
@@ -854,7 +684,6 @@ def render_unified_single_entry_form(table_name: str):
                             help="Describe the type of relationship"
                         )
                         
-                        # Show create button only if parent is selected
                         if parent_name and parent_id:
                             if st.button("Create Relationship", key="match_child_submit"):
                                 hierarchy_service = HierarchyService()
@@ -882,7 +711,6 @@ def render_unified_single_entry_form(table_name: str):
                                     st.error(f"Failed to create hierarchy: {result['message']}")
                         else:
                             st.info("Please select a parent institution to create the relationship")
-                    ############################################
                     
     
     # Auto-lookup button (only for institution table)
@@ -910,53 +738,7 @@ def render_unified_single_entry_form(table_name: str):
                     except Exception as e:
                         st.error(f"Lookup failed: {str(e)}")
     
-    # if table_name == 'institution' and st.session_state.get('lookup_result') and not st.session_state.get('lookup_used', False):
-    #     lookup_result = st.session_state['lookup_result']
-    #     confidence = lookup_result.confidence_score
-        
-    #     if confidence >= 0.9:
-    #         st.success(f"High confidence data found ({confidence * 100:.0f}%)")
-    #     elif confidence >= 0.7:
-    #         st.info(f"Moderate confidence data found ({confidence * 100:.0f}%)")
-    #     else:
-    #         st.warning(f"Low confidence data found ({confidence * 100:.0f}%) - Please verify")
-        
-    #     col1, col2 = st.columns(2)
-        
-    #     with col1:
-    #         if lookup_result.institution_type_layer1:
-    #             st.write(f"**Type Layer 1:** {lookup_result.institution_type_layer1}")
-    #         if lookup_result.institution_type_layer2:
-    #             st.write(f"**Type Layer 2:** {lookup_result.institution_type_layer2}")
-    #         if lookup_result.institution_type_layer3:
-    #             st.write(f"**Type Layer 3:** {lookup_result.institution_type_layer3}")
-        
-    #     with col2:
-    #         if lookup_result.parent_country:
-    #             st.write(f"**Parent Country:** {lookup_result.parent_country}")
-    #         if lookup_result.subsidiary_country:
-    #             st.write(f"**Subsidiary Country:** {lookup_result.subsidiary_country}")
-        
-    #     if lookup_result.reasoning:
-    #         with st.expander("Why these values?"):
-    #             st.write(lookup_result.reasoning)
-        
-    #     if lookup_result.sources:
-    #         with st.expander(f"Sources ({len(lookup_result.sources)} sources used)"):
-    #             for source in lookup_result.sources:
-    #                 st.markdown(f"• [{source['title']}]({source['url']})")
-        
-    #     col1, col2, col3 = st.columns([2, 1, 2])
-    #     with col2:
-    #         if st.button("Use These Values", key="use_lookup", type="primary"):
-    #             # Set prefill values
-    #             st.session_state['prefill_type1'] = lookup_result.institution_type_layer1
-    #             st.session_state['prefill_type2'] = lookup_result.institution_type_layer2
-    #             st.session_state['prefill_type3'] = lookup_result.institution_type_layer3
-    #             st.session_state['prefill_parent'] = lookup_result.parent_country
-    #             st.session_state['prefill_sub'] = lookup_result.subsidiary_country
-    #             st.session_state['lookup_used'] = True
-    #             st.rerun()
+   
 
     if table_name == 'institution' and st.session_state.get('lookup_result') and not st.session_state.get('lookup_used', False):
         lookup_result = st.session_state['lookup_result']
@@ -991,13 +773,11 @@ def render_unified_single_entry_form(table_name: str):
             with st.expander("Why these values?", expanded=False):
                 st.write(lookup_result.reasoning)
         
-        # Use the new compact source display
         render_lookup_sources_compact(lookup_result)
         
         col1, col2, col3 = st.columns([2, 1, 2])
         with col2:
             if st.button("Use These Values", key="use_lookup", type="primary", use_container_width=True):
-                # Clear ALL widget states for this table to force recreation
                 keys_to_clear = []
                 for key in list(st.session_state.keys()):
                     if (key.startswith(f"{table_name}_req_") or 
@@ -1008,11 +788,9 @@ def render_unified_single_entry_form(table_name: str):
                 for key in keys_to_clear:
                     st.session_state.pop(key, None)
                 
-                # Clear any existing prefill values
                 for key in ['prefill_type1', 'prefill_type2', 'prefill_type3', 'prefill_parent', 'prefill_sub']:
                     st.session_state.pop(key, None)
                 
-                # Set new prefill values
                 st.session_state['prefill_type1'] = lookup_result.institution_type_layer1
                 st.session_state['prefill_type2'] = lookup_result.institution_type_layer2
                 st.session_state['prefill_type3'] = lookup_result.institution_type_layer3
@@ -1020,7 +798,6 @@ def render_unified_single_entry_form(table_name: str):
                 st.session_state['prefill_sub'] = lookup_result.subsidiary_country
                 st.session_state['lookup_used'] = True
                 
-                # Force immediate refresh
                 st.rerun()
     
     st.markdown("---")
@@ -1056,25 +833,21 @@ def render_unified_single_entry_form(table_name: str):
                 with cols[i % 2]:
                     form_data[field_config.name] = render_form_field(field_config, dropdown_options, f"{table_name}_adv_{i}")
 
-    ########################################################
-    # Add hierarchy form for new institutions (before submit)
+    # Add hierarchy form for new institutions
     hierarchy_form_data = None
     if table_name == 'institution':
 
         new_inst_expander_key = f"new_hierarchy_expander_opened_{primary_value}"
     
-        # Initialize expander state - starts closed
         if new_inst_expander_key not in st.session_state:
             st.session_state[new_inst_expander_key] = False
         
         with st.expander("Add Hierarchy Relationship (Optional)", expanded=st.session_state[new_inst_expander_key]):
             st.write("Create a parent-child relationship for this new institution")
             
-            # Initialize session state for relationship choice
             if "hierarchy_relationship_choice" not in st.session_state:
                 st.session_state["hierarchy_relationship_choice"] = "No Relationship"
             
-            # Radio button for relationship type
             relationship_choice = st.radio(
                 "How should this new institution be related?",
                 ["No Relationship", "As Parent Institution", "As Child Institution"],
@@ -1083,7 +856,6 @@ def render_unified_single_entry_form(table_name: str):
                 help="Choose the role of this new institution in the hierarchy"
             )
             
-            # Update session state
             st.session_state["hierarchy_relationship_choice"] = relationship_choice
             
             if relationship_choice != "No Relationship":
@@ -1099,7 +871,6 @@ def render_unified_single_entry_form(table_name: str):
                         help_text="Institution that will be owned/controlled by this new parent"
                     )
                     
-                    # Always show the form fields, regardless of search selection
                     col1, col2 = st.columns(2)
                     
                     with col1:
@@ -1126,7 +897,6 @@ def render_unified_single_entry_form(table_name: str):
                         key="new_rel_type"
                     )
                     
-                    # Only store hierarchy data if child institution is selected
                     if child_name and child_id:
                         hierarchy_form_data = {
                             'parent_institution': primary_value,
@@ -1141,7 +911,6 @@ def render_unified_single_entry_form(table_name: str):
                 else:  # As Child Institution
                     st.write(f"**{primary_value}** will be the CHILD institution")
                     
-                    # Search for parent institution
                     parent_name, parent_id = render_institution_search_widget(
                         key="new_parent",
                         label="Select Parent Institution",
@@ -1149,7 +918,6 @@ def render_unified_single_entry_form(table_name: str):
                         help_text="Institution that owns/controls this new child"
                     )
                     
-                    # Always show the form fields, regardless of search selection
                     col1, col2 = st.columns(2)
                     
                     with col1:
@@ -1176,7 +944,6 @@ def render_unified_single_entry_form(table_name: str):
                         key="new_child_rel_type"
                     )
                     
-                    # Only store hierarchy data if parent institution is selected
                     if parent_name and parent_id:
                         hierarchy_form_data = {
                             'parent_institution': parent_name,
@@ -1188,7 +955,6 @@ def render_unified_single_entry_form(table_name: str):
                             'mode': 'new_as_child'
                         }
 
-    ########################################################
     st.markdown("---")
 
     
@@ -1214,22 +980,11 @@ def render_unified_single_entry_form(table_name: str):
                     )
                     
                     if result['success']:
-                        # st.success(f"{config.display_name} created successfully!")
-                        # st.session_state[f'_cache_needs_clear'] = True
-                        
-                        # if table_name == 'institution':
-                        #     st.session_state.pop('lookup_result', None)
-                        #     st.session_state.pop('lookup_used', None)
-                        #     for key in ['prefill_type1', 'prefill_type2', 'prefill_type3', 'prefill_parent', 'prefill_sub']:
-                        #         st.session_state.pop(key, None)
-                        
-                        # if st.button("Add Another", key="add_another"):
-                        #     st.rerun()
+                    
 
                         st.success(f"{config.display_name} created successfully!")
 
-                        ####################################################
-                        # Handle hierarchy creation if data was provided
+    
                         if table_name == 'institution' and hierarchy_form_data:
                             with st.spinner("Creating hierarchy relationship..."):
                                 time.sleep(1)  # Brief delay to ensure institution is in database
@@ -1237,7 +992,7 @@ def render_unified_single_entry_form(table_name: str):
                                 if 'new_id' in result:
                                     new_institution_id = result['new_id']
                                 else:
-                                    # Calculate what the new ID would be (same logic as institution creation)
+                                    # Calculate what the new ID would be so we don't have to reload/cache insittutions
                                     try:   
                                         max_id_query = "SELECT MAX(id_institution_cpi) as max_id FROM institution"
                                         max_id_result = QueryService().execute_query(max_id_query)
@@ -1250,7 +1005,6 @@ def render_unified_single_entry_form(table_name: str):
                                         new_institution_id = None
                                 
                                 if new_institution_id:
-                                    # Create hierarchy entry using direct database insert (bypass validation)
                                     hierarchy_service = HierarchyService()
 
                                     if hierarchy_form_data['mode'] == 'new_as_parent':
@@ -1293,62 +1047,11 @@ def render_unified_single_entry_form(table_name: str):
                             for key in ['new_relationship_choice', 'new_ownership', 'new_controlling', 'new_rel_type', 'new_child_ownership', 'new_child_controlling', 'new_child_rel_type']:
                                 st.session_state.pop(key, None)
                         
-                        ####################################################
 
                     else:
                         st.error(result['message'])
     
-    # with col2:
-    #     if st.button("Reset Form", use_container_width=True):
-    #         keys_to_clear = []
-        
-    #         # Institution-specific keys
-    #         if table_name == 'institution':
-    #             keys_to_clear.extend([
-    #                 'lookup_result', 'lookup_used', 
-    #                 'prefill_type1', 'prefill_type2', 'prefill_type3', 
-    #                 'prefill_parent', 'prefill_sub',
-    #                 # Hierarchy form keys
-    #                 'hierarchy_relationship_choice', 'new_relationship_choice',
-    #                 'new_ownership', 'new_controlling', 'new_rel_type',
-    #                 'new_child_ownership', 'new_child_controlling', 'new_child_rel_type',
-    #                 # Hierarchy match keys
-    #                 'hierarchy_match_name', 'hierarchy_match_type', 'show_hierarchy_form',
-    #                 'match_hierarchy_choice', 'last_primary_value'
-    #             ])
-            
-    #         # Clear all form field keys (this will reset all input values)
-    #         # Form fields use pattern: {table_name}_{field_type}_{index}
-    #         form_key_patterns = [
-    #             f"{table_name}_primary",
-    #             f"{table_name}_req_",
-    #             f"{table_name}_opt_", 
-    #             f"{table_name}_adv_",
-    #             "new_child", "new_parent", "match_child", "match_parent",
-    #             "hierarchy_radio", "match_hierarchy_radio"
-    #         ]
-            
-    #         # Find and clear all matching keys
-    #         all_keys = list(st.session_state.keys())
-    #         for key in all_keys:
-    #             # Clear specific keys
-    #             if key in keys_to_clear:
-    #                 st.session_state.pop(key, None)
-                
-    #             # Clear form field keys
-    #             for pattern in form_key_patterns:
-    #                 if pattern in key:
-    #                     st.session_state.pop(key, None)
-    #                     break
-            
-    #         # Clear expander states
-    #         expander_keys = [k for k in all_keys if 'expander_opened' in k or 'hierarchy_expander' in k]
-    #         for key in expander_keys:
-    #             st.session_state.pop(key, None)
-            
-    #         st.success("Form reset successfully!")
-    #         st.rerun()
-
+   
 
 
 
@@ -1696,34 +1399,23 @@ def render_enhanced_grid_row(result: ValidationResult, config: TableConfig, sess
                     
                     else:
                         st.text(current_value or '')
-        
-        # Lookup button
-        # lookup_col_index = len(display_fields) if len(display_fields) < len(cols) - 1 else len(cols) - 2
-        # with cols[lookup_col_index]:
-        #     if table_name == 'institution':
-        #         if st.button("🔍", key=f"lookup_btn_{result.row_index}_{session_key}", help="Auto-lookup"):
-        #             run_single_lookup(result, table_name, session_key)
-        #     else:
-        #         st.markdown("")
-        # Lookup button and source display
+
         lookup_col_index = len(display_fields) if len(display_fields) < len(cols) - 1 else len(cols) - 2
         with cols[lookup_col_index]:
             if table_name == 'institution':
-                # Create two sub-columns for lookup button and source info
                 button_col, info_col = st.columns([1, 1])
                 
                 with button_col:
                     if st.button("🔍", key=f"lookup_btn_{result.row_index}_{session_key}", help="Auto-lookup"):
                         run_single_lookup(result, table_name, session_key, existing_data)
                 
-                # Show lookup info if results exist
                 with info_col:
                     if lookup_result and lookup_result.sources:
-                        # Use popover for compact source display
+                        #should be a small button that's not too obtrusive
                         if hasattr(st, 'popover'):
                             with st.popover("📋", help=f"View {len(lookup_result.sources)} sources"):
                                 st.caption("**Sources used for lookup:**")
-                                for idx, source in enumerate(lookup_result.sources[:3], 1):  # Show top 3
+                                for idx, source in enumerate(lookup_result.sources[:5], 1):  # Show top 3
                                     title = source.get('title', 'Source')
                                     if len(title) > 40:
                                         title = title[:37] + "..."
@@ -1737,13 +1429,11 @@ def render_enhanced_grid_row(result: ValidationResult, config: TableConfig, sess
                                 if confidence:
                                     st.caption(f"Confidence: {confidence*100:.0f}%")
                         else:
-                            # Fallback for older Streamlit versions - use a small button
                             if st.button("📋", key=f"sources_btn_{result.row_index}_{session_key}", 
                                        help=f"Click to see {len(lookup_result.sources)} sources"):
                                 st.session_state[f'show_sources_{result.row_index}_{session_key}'] = True
                                 st.rerun()
                     elif lookup_result:
-                        # Show confidence without sources
                         confidence = getattr(lookup_result, 'confidence_score', None)
                         if confidence:
                             confidence_color = "🟢" if confidence >= 0.8 else "🟡" if confidence >= 0.6 else "🔴"
@@ -1759,11 +1449,9 @@ def render_enhanced_grid_row(result: ValidationResult, config: TableConfig, sess
             if st.button("✕", key=f"discard_row_{result.row_index}_{session_key}", help="Remove this row"):
                 st.session_state[f'{session_key}_user_decisions'][result.row_index] = 'skip'
                 
-                # Remove any pending mapping for this row
                 if result.row_index in st.session_state.get(f'{session_key}_pending_mappings', {}):
                     del st.session_state[f'{session_key}_pending_mappings'][result.row_index]
                 
-                # Clean up any dropdown state
                 if f'show_match_dropdown_{result.row_index}' in st.session_state:
                     del st.session_state[f'show_match_dropdown_{result.row_index}']
                 st.rerun()
@@ -2455,7 +2143,6 @@ def render_standard_submission(
     """Standard submission for non-institution tables"""
     
     if st.button(f"Add {config.display_name}", type="primary", key=f"submit_{table_name}"):
-        # Check required fields
         missing_fields = []
         for field_name in config.required_fields:
             if not form_data.get(field_name):
@@ -2467,7 +2154,6 @@ def render_standard_submission(
         
         username = st.session_state.get('username', 'analyst')
         
-        # Check for duplicates if configured
         if config.duplicate_check_fields:
             primary_field = config.duplicate_check_fields[0]
             input_value = form_data.get(primary_field)
@@ -2479,7 +2165,6 @@ def render_standard_submission(
                     st.error(f"Entry already exists: {exact_duplicate}")
                     return
                 
-                # Check fuzzy matches for other tables
                 fuzzy_matches = check_fuzzy_matches(input_value, existing_data, primary_field)
                 if fuzzy_matches:
                     st.warning(f"Found {len(fuzzy_matches)} similar entries:")
@@ -2489,10 +2174,8 @@ def render_standard_submission(
                     if not st.button("Continue Anyway", key="continue_despite_fuzzy"):
                         return
         
-        # Auto-populate data
         enhanced_data = auto_populate_data(form_data, username)
         
-        # Insert the record
         query_service = QueryService()
         success = query_service.execute_insert(table_name, enhanced_data)
         
