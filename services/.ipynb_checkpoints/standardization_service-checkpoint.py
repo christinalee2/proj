@@ -7,7 +7,7 @@ from utils.text_processing import TextProcessor
 
 
 class StandardizationService:
-    """Handles standardization mappings with Keep functionality by putting into the correct standardization table (only works for institution and geography"""
+    """Handles standardization mappings with Keep functionality by putting into the correct standardization table (only works for institution and geography)"""
     
     def __init__(self):
         self.query_service = QueryService()
@@ -16,14 +16,7 @@ class StandardizationService:
                                standardization_df: Optional[pd.DataFrame] = None,
                                institution_df: Optional[pd.DataFrame] = None) -> Dict[str, Any]:
         """
-        Process "Keep" action for institution fuzzy match
-        
-        Args:
-            user_input: The name the user typed
-            matched_institution: The fuzzy matched name from institution table
-            
-        Returns:
-            Dictionary with success status and message
+        Process "Keep" action for institution fuzzy match by inserting into the standardization table 
         """
         try:
             
@@ -31,7 +24,6 @@ class StandardizationService:
             if standardization_df is None:
                 standardization_df = get_table_data_cached('institution_standardization', limit=None)
             
-            # Check if user input already exists in either column
             if not standardization_df.empty:
                 # Check institution_cpi column
                 existing_in_cpi = standardization_df[
@@ -64,7 +56,6 @@ class StandardizationService:
                 if not matches.empty:
                     matched_institution_row = matches.iloc[0]
                     id_institution_cpi = matched_institution_row.get('id_institution_cpi')
-                    print(f"DEBUG: Found id_institution_cpi = {id_institution_cpi} for matched institution '{matched_institution}'")
             
             if id_institution_cpi is None:
                 print(f"WARNING: Could not find id_institution_cpi for matched institution '{matched_institution}'")
@@ -86,7 +77,7 @@ class StandardizationService:
                         matched_institution,
                         id_institution_cpi,
                         f'Direct mapping to existing institution',
-                        standardization_df  # Pass the data
+                        standardization_df  
                     )
             
             # Check if matched institution exists in institution_original column
@@ -96,7 +87,6 @@ class StandardizationService:
                 ]
                 
                 if not matched_in_original.empty:
-                    print(f"DEBUG: Found {matched_institution} in original column, using its standardized name")
                     # Use the standardized name from that row, but keep the id_institution_cpi from the actual institution
                     standardized_name = matched_in_original.iloc[0]['institution_cpi']
                     return self._create_institution_standardization_mapping(
@@ -108,7 +98,6 @@ class StandardizationService:
                     )
             
             # If matched institution not found in standardization table, use it directly
-            print(f"DEBUG: No existing standardization found, creating direct mapping")
             return self._create_institution_standardization_mapping(
                 user_input,
                 matched_institution,
@@ -125,8 +114,12 @@ class StandardizationService:
                 'action': 'error',
                 'message': f'Error processing keep action: {str(e)}'
             }
+
+
+
+            
     
-    def process_keep_geography(self, user_input: str, matched_country: str) -> Dict[str, Any]:
+    def process_keep_geography(self, user_input: str, matched_country: str) -> Dict[str, Any]: # Need to come back to test when geography table gets re-added
         """
         Process "Keep" action for geography fuzzy match
         
@@ -205,7 +198,12 @@ class StandardizationService:
                 'action': 'error',
                 'message': f'Error processing geography keep action: {str(e)}'
             }
-    
+
+
+
+
+
+        
     def _create_institution_standardization_mapping(self, original_name: str, 
                                                    standardized_name: str, 
                                                    id_institution_cpi: str,
@@ -213,9 +211,7 @@ class StandardizationService:
                                                    existing_data: Optional[pd.DataFrame] = None) -> Dict[str, Any]:
         """Create a new standardization mapping in institution_standardization table"""
         try:
-            print(f"DEBUG: Creating institution mapping: '{original_name}' -> '{standardized_name}' (ID: {id_institution_cpi})")
-            
-            # Use passed data or load fresh
+
             if existing_data is None:
                 existing_data = get_table_data_cached('institution_standardization', limit=None)
             
@@ -230,7 +226,7 @@ class StandardizationService:
             from config import CURRENT_YEAR
             mapping_data = {
                 id_column: next_id,
-                'id_institution_cpi': id_institution_cpi,  # NEW: Include the institution ID
+                'id_institution_cpi': id_institution_cpi,  
                 'institution_original': TextProcessor.normalize_institution_name(original_name),
                 'institution_cpi': standardized_name,
                 'reference': reference,
@@ -240,12 +236,10 @@ class StandardizationService:
             
             mapping_data = {k: v for k, v in mapping_data.items() if v is not None}
             
-            print(f"DEBUG: Inserting mapping data: {mapping_data}")
             
             success = self.query_service.execute_insert('institution_standardization', mapping_data)
             
             if success:
-                print(f"DEBUG: Successfully created institution standardization mapping with ID {next_id}")
                 return {
                     'success': True,
                     'action': 'created_mapping',
@@ -268,7 +262,11 @@ class StandardizationService:
                 'action': 'error', 
                 'message': f'Error creating institution standardization mapping: {str(e)}'
             }
-    
+
+
+
+            
+    #come back to test when geography table re-added
     def _create_geography_standardization_mapping(self, original_name: str, 
                                                 standardized_name: str) -> Dict[str, Any]:
         """Create a new geography standardization mapping"""
@@ -325,41 +323,4 @@ class StandardizationService:
                 'message': f'Error creating geography mapping: {str(e)}'
             }
     
-    # def get_standardized_name(self, original_name: str, table_type: str = 'institution') -> Optional[str]:
-    #     """
-    #     Get the standardized name for an input if it exists
-        
-    #     Args:
-    #         original_name: The original name to look up
-    #         table_type: 'institution' or 'geography'
-            
-    #     Returns:
-    #         Standardized name if found, None otherwise
-    #     """
-    #     try:
-    #         if table_type == 'institution':
-    #             table_name = 'institution_standardization'
-    #             original_col = 'institution_original'
-    #             cpi_col = 'institution_cpi'
-    #         else:
-    #             table_name = 'geography_standardization'
-    #             original_col = 'country_original'
-    #             cpi_col = 'country_cpi'
-            
-    #         standardization_df = get_table_data_cached(table_name, limit=None)
-            
-    #         if standardization_df.empty:
-    #             return None
-            
-    #         matches = standardization_df[
-    #             standardization_df[original_col].str.lower() == original_name.lower()
-    #         ]
-            
-    #         if not matches.empty:
-    #             return matches.iloc[0][cpi_col]
-            
-    #         return None
-            
-    #     except Exception as e:
-    #         print(f"Error getting standardized name: {e}")
-    #         return None
+  

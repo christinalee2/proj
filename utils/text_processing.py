@@ -11,12 +11,7 @@ class TextProcessor:
     def normalize_institution_name(name: str) -> str:
         """
         Normalize institution name by removing accents, standardizing whitespace, and converting to a consistent format
-        
-        Args:
-            name: Original institution name
-            
-        Output:
-            Normalized institution name
+
         """
         if not name:
             return ""
@@ -32,17 +27,15 @@ class TextProcessor:
         name = re.sub(r'[^\w\s\-.,&()\']', '', name)
         
         return name
+
+
+
+
     
     @staticmethod
     def remove_accents(text: str) -> str:
         """
-        Remove accents and diacritical marks
-        
-        Args:
-            text: Input text
-            
-        Output:
-            Text without accents 
+        Remove accents and diacriticals
         """
         if not text:
             return ""
@@ -55,17 +48,15 @@ class TextProcessor:
         )
         
         return unicodedata.normalize('NFC', without_accents)
+
+
+
+        
     
     @staticmethod
     def extract_suffix(institution_name: str) -> Optional[str]:
         """
-        Extract common business suffixes from institution name to try to match without (i.e. 123Venture should match to 123Venture SA), can add to this list as needed
-        
-        Args:
-            institution_name: Full institution name
-            
-        Returns:
-            Extracted suffix in lowercase, or None if no common suffix found
+        Extract common business suffixes from institution name to try to match without (e.g. 123Venture should match to 123Venture SA), can add to this list as needed
         """
         suffixes = [
             'llc', 'ltd', 'limited', 'inc', 'incorporated', 'corp', 'corporation',
@@ -85,18 +76,13 @@ class TextProcessor:
         
         return None
     
+
     
     @staticmethod
     def generate_short_name(institution_name: str, max_length: int = 50) -> str:
         """
         Generate a shortened version of institution name, maybe we don't need this? just some general shortening/acronym production
-        
-        Args:
-            institution_name: Full institution name
-            max_length: Maximum length for short name
-            
-        Output:
-            Shortened institution name
+
         """
         if len(institution_name) <= max_length:
             return institution_name

@@ -11,7 +11,7 @@ from config import CURRENT_YEAR
 
 
 class InstitutionService:
-    """Handles all institution-related operations"""
+    """For all institution-related stuff, all other tables will follow a generic structure"""
     
     def __init__(self):
         self.query_service = QueryService()
@@ -36,12 +36,7 @@ class InstitutionService:
     ) -> Dict[str, Any]:
         """
         Create a new institution with validation and enrichment - important to ensure types match parquet file
-        
-        Args:
-            the different form inputs to the form 
-            
-        Returns:
-            Dictionary with creation result and metadata
+        Takes in all the institution form variables and outputs a dict of the results 
         """
         result = {
             'success': False,

@@ -11,21 +11,17 @@ class ValidationService:
     def __init__(self):
         self.fuzzy_matcher = FuzzyMatcher()
         self.query_service = QueryService()
-    
+
+
+        
     def validate_institution_entry(
         self,
         institution_name: str,
         existing_institutions: pd.DataFrame
     ) -> Dict[str, any]:
         """
-        Validate a new institution entry
-        
-        Args:
-            institution_name: Name of institution to validate
-            existing_institutions: DataFrame of existing institutions
-            
-        Returns:
-            Dictionary with validation results
+        Validate a new institution entry against the existing institutions and returns a dict with the results
+
         """
         normalized_name = TextProcessor.normalize_institution_name(institution_name)
         
@@ -103,21 +99,19 @@ class ValidationService:
             validation_result['is_valid'] = False
         
         return validation_result
-    
+
+
+
+
+        
     def validate_bulk_entries(
         self,
         df: pd.DataFrame,
         existing_institutions: pd.DataFrame
     ) -> pd.DataFrame:
         """
-        Validate multiple institution entries from a CSV
+        Validate multiple institution entries from a CSV, takes in a df of new institutions and compares to existing, returns as a df with the results added
         
-        Args:
-            df: DataFrame with new institutions
-            existing_institutions: DataFrame of existing institutions
-            
-        Returns:
-            DataFrame with validation results added
         """
         validation_results = []
         
@@ -168,67 +162,4 @@ class ValidationService:
         validation_df = pd.DataFrame(validation_results)
         return pd.concat([df.reset_index(drop=True), validation_df], axis=1)
     
-    # def check_required_fields(
-    #     self,
-    #     data: Dict[str, any],
-    #     required_fields: List[str]
-    # ) -> Tuple[bool, List[str]]:
-    #     """
-    #     Check if all required fields are present and non-empty
-        
-    #     Args:
-    #         data: Dictionary of field values
-    #         required_fields: List of required field names
-            
-    #     Returns:
-    #         Tuple of (is_valid, list_of_missing_fields)
-    #     """
-    #     missing_fields = []
-        
-    #     for field in required_fields:
-    #         if field not in data or data[field] is None or str(data[field]).strip() == '':
-    #             missing_fields.append(field)
-        
-    #     return len(missing_fields) == 0, missing_fields
-    
-    # def validate_country_code(self, country: str, valid_countries: pd.DataFrame) -> bool:
-    #     """
-    #     Validate that a country code exists in the geography table
-        
-    #     Args:
-    #         country: Country code or name to validate
-    #         valid_countries: DataFrame of valid countries
-            
-    #     Returns:
-    #         True if valid, False otherwise
-    #     """
-    #     if not country:
-    #         return True  # Allow empty values
-        
-    #     country_lower = country.lower()
-        
-    #     # Check against country names and codes
-    #     return any(
-    #         country_lower == str(row['country_cpi']).lower() or
-    #         country_lower == str(row.get('iso2_code', '')).lower() or
-    #         country_lower == str(row.get('iso3_code', '')).lower()
-    #         for _, row in valid_countries.iterrows()
-    #     )
-    
-    # def validate_year(self, year: any, min_year: int = 1990, max_year: int = 2100) -> bool:
-    #     """
-    #     Validate that a year is within acceptable range
-        
-    #     Args:
-    #         year: Year value to validate
-    #         min_year: Minimum acceptable year
-    #         max_year: Maximum acceptable year
-            
-    #     Returns:
-    #         True if valid, False otherwise
-    #     """
-    #     try:
-    #         year_int = int(year)
-    #         return min_year <= year_int <= max_year
-    #     except (ValueError, TypeError):
-    #         return False
+   

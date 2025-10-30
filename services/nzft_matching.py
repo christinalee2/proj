@@ -22,6 +22,9 @@ class MatchResult:
     selected_match: Optional[Dict[str, str]] = None
 
 
+
+
+
 @st.cache_data(ttl=14400)  # Cache for 4 hours, could honestly be longer
 def load_nzft_data_cached() -> Optional[pd.DataFrame]:
     """Loads NZFT data from AWS as a csv file
@@ -69,18 +72,24 @@ class NZFTMatcher:
     """Runs exact matching and fuzzy matching on normalized versions of hte text"""
     
     def __init__(self):
-        self.target_column = 'institution'  # Default column name in the uploaded file, can change if there's something else that's commonly used
+        self.target_column = 'institution'  # Default column name in the uploaded file, can change if there's something else that's commonly used like entity or whatever
         self.nzft_df = None
         self.suffix_patterns = [
             r'\s+(llc|ltd|limited|inc|incorporated|corp|corporation)\.?$',
             r'\s+(gmbh|sarl|srl|pvt|pty|pte|bv|nv|ag|sa|sas|ab)\.?$',
             r'\s+(plc|public\s+limited\s+company|se|oyj|spa)\.?$'
         ]
+
+
+        
     
     def load_nzft_data(self) -> bool:
         """Load NZFT reference data from fixed S3 location"""
         self.nzft_df = load_nzft_data_cached()
         return self.nzft_df is not None
+
+
+        
     
     def normalize_for_matching(self, name: str) -> str:
         """Normalize name for exact matching (includes suffix removal)"""
@@ -93,6 +102,9 @@ class NZFTMatcher:
             normalized = re.sub(pattern, '', normalized, flags=re.IGNORECASE).strip()
         
         return normalized
+
+
+        
     
     def find_exact_matches(self, input_names: List[str]) -> Dict[int, Dict[str, str]]:
         """Find exact matches against both entity and entity_clean columns"""
@@ -133,6 +145,10 @@ class NZFTMatcher:
                 exact_matches[idx] = entity_clean_lookup[input_normalized]
         
         return exact_matches
+
+
+
+        
     
     def find_fuzzy_matches(self, input_names: List[str], exclude_exact: Dict[int, Dict[str, str]]) -> Dict[int, List[Tuple[str, float, Dict[str, str]]]]:
         """Find fuzzy matches for non-exact entries"""
@@ -411,13 +427,11 @@ def render_nzft_page():
                     
                     st.markdown("---")
         
-        # Show no matches
         if no_match_results:
             with st.expander(f"No Matches Found ({len(no_match_results)})"):
                 for result in no_match_results:
                     st.text(f"• {result.original_name}")
         
-        # Generate Final Results
         st.markdown("---")
         st.subheader("3. Generate Results")
         
@@ -433,7 +447,8 @@ def render_nzft_page():
             
             csv_buffer = io.StringIO()
             final_df.to_csv(csv_buffer, index=False)
-            
+
+            #downloads as csv, can be changed if it would be more useful to uplaod to aws or something
             st.download_button(
                 label="Download Results as CSV",
                 data=csv_buffer.getvalue(),
@@ -443,8 +458,12 @@ def render_nzft_page():
             )
 
 
+
+
+
+    
 def generate_final_results(original_df: pd.DataFrame, match_results: List[MatchResult], target_column: str) -> pd.DataFrame:
-    """Generate final DataFrame with separate nzft_id, entity, and entity_clean columns"""
+    """Generate final DataFrame with separate nzft_id, entity, and entity_clean columns to denote the match, right now it keeps the other current values from the uploaded df, can be switched to keep the values from the nzft file instead"""
     final_df = original_df.copy()
     
     target_col_index = final_df.columns.get_loc(target_column)
@@ -480,8 +499,11 @@ def generate_final_results(original_df: pd.DataFrame, match_results: List[MatchR
     return final_df
 
 
+
+
+
+
 def reset_nzft_session():
-    """Reset session state"""
     for key in ['nzft_uploaded_df', 'nzft_match_results', 'nzft_user_selections', 
                 'nzft_exact_confirmations', 'nzft_final_df', 'nzft_last_file']:
         if key in st.session_state:

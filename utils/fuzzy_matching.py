@@ -21,10 +21,13 @@ class FuzzyMatcher:
         self.vectorizer = None
         self.tfidf_matrix = None
         self.institution_names = None
+
+
+
     
     def fit(self, institution_df: pd.DataFrame):
         """
-        Pre-compute TF-IDF vectors for all institutions 
+        Pre-compute TF-IDF vectors for all institutions, speeds it up significantly but more coarse
         
         Args:
             institution_df: institution_cpi df
@@ -51,7 +54,11 @@ class FuzzyMatcher:
         )
         
         self.tfidf_matrix = self.vectorizer.fit_transform(normalized_names)
-    
+
+
+
+
+        
     def find_similar_institutions(
         self,
         query: str,
@@ -135,19 +142,15 @@ class FuzzyMatcher:
                 if similarities[idx] >= 0.3
             ]
             return tfidf_matches
+
+
+
     
 
 @st.cache_resource(ttl=600)
 def get_fitted_matcher(institution_df: pd.DataFrame, threshold: float = 0.85) -> FuzzyMatcher:
     """
-    Get fitted fuzzy matcher (cached)
-    
-    Args:
-        institution_df: df with institutions (institution_cpi)
-        threshold: Similarity threshold
-        
-    Output:
-        fuzzy matcher
+    Get fitted fuzzy matcher 
     """
     matcher = FuzzyMatcher(threshold=threshold)
     matcher.fit(institution_df)
