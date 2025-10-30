@@ -10,6 +10,10 @@ import os
 import traceback
 import io
 
+##########################
+#Generally there's AWS wrangler inserts that are faster and better - and then there are also inserts from my original implementation that rewrite the whole parquet file with the new entry if wrangler fails for some reason. These functions are labeled ORIGINAL VERSION but shouldn't ever really be running, just kept as a fallback
+##########################
+
 try:
     import awswrangler as wr
     HAS_WRANGLER = True
@@ -19,7 +23,7 @@ except ImportError:
 
 
 def get_next_id_for_table(existing_df, table_name):
-    """Get id that's one greater than the current id, finds id column automatically, need to update if things change"""
+    """Slow fallback version - gets id that's one greater than the current id, finds id column automatically, shouldn't ever really be running - ORIGINAL VERSION"""
     
     id_column = None
     if not existing_df.empty:
@@ -40,6 +44,7 @@ def get_next_id_for_table(existing_df, table_name):
             return id_column, 1
         
         numeric_ids = pd.to_numeric(non_null_ids, errors='coerce').dropna()
+        #Slow b/c needs access to all ids
         max_id = int(numeric_ids.max()) if len(numeric_ids) > 0 else 0
         return id_column, max_id + 1
     except:
@@ -90,10 +95,14 @@ class DatabaseConnection:
         'geography_standardization': f's3://{S3_BUCKET}/{S3_BASE_PATH}/geography_standardization/',
         'hierarchy': f's3://{S3_BUCKET}/{S3_BASE_PATH}/hierarchy/'
     }
+
+
+
+    
     
     @classmethod
     def get_connection(cls) -> Cursor:
-        """Get or create a database connection - ORIGINAL VERSION"""
+        """Get or create a database connection """
         if cls._connection is None:
             cls._connection = connect(
                 region_name=AWS_REGION,
@@ -102,17 +111,23 @@ class DatabaseConnection:
             )
         return cls._connection
 
+
+
+    
     @classmethod
     def get_table_data(cls, table_name: str, limit: Optional[int] = None) -> pd.DataFrame:
-        """Get data from any table - ORIGINAL VERSION"""
+        """Get data from any table """
         query = f"SELECT * FROM {table_name}"
         if limit:
             query += f" LIMIT {limit}"
         return cls.execute_query(query)
+
+
+
     
     @classmethod
     def execute_query(cls, query: str, parameters: Optional[tuple] = None) -> pd.DataFrame:
-        """Execute a SELECT query and return results as a pandas DataFrame - ORIGINAL VERSION"""
+        """Execute a SELECT query and return results as a pandas DataFrame """
         conn = cls.get_connection()
         cursor = conn.cursor()
         
@@ -139,20 +154,27 @@ class DatabaseConnection:
             return pd.DataFrame()
         finally:
             cursor.close()
+
+
+
     
     @classmethod
     def check_table_exists(cls, table_name: str) -> bool:
-        """Check if table exists - ORIGINAL VERSION"""
+        """Check if table exists """
         try:
             query = f"SHOW TABLES LIKE '{table_name}'"
             result = cls.execute_query(query)
             return not result.empty
         except:
             return False
+
+
+
+
     
     @classmethod
     def _read_existing_parquet(cls, table_name: str) -> pd.DataFrame:
-        """Read existing data from the specific S3 parquet file - ORIGINAL VERSION"""
+        """Read existing data from the specific S3 parquet file, needs to be loaded into TABLE_FILES"""
         if table_name not in cls.TABLE_FILES:
             raise ValueError(f"Unknown table: {table_name}")
         
@@ -162,7 +184,6 @@ class DatabaseConnection:
         try:
             print(f"Reading existing data from s3://{cls.S3_BUCKET}/{s3_key}")
             
-            # Download the existing parquet file
             response = s3_client.get_object(Bucket=cls.S3_BUCKET, Key=s3_key)
             existing_df = pd.read_parquet(io.BytesIO(response['Body'].read()))
             
@@ -175,10 +196,14 @@ class DatabaseConnection:
         except Exception as e:
             print(f"Error reading existing data from {s3_key}: {e}")
             raise e
+
+
+
+
     
     @classmethod
     def _clean_dataframe_for_insert(cls, df: pd.DataFrame) -> pd.DataFrame:
-        """Clean DataFrame for insertion, makes sure they match expected int formats"""
+        """Clean DataFrame for insertion, makes sure they match expected int formats for year columns"""
         try:
             df_clean = df.copy()
             
@@ -207,30 +232,26 @@ class DatabaseConnection:
 
     @classmethod
     def _apply_column_types(cls, df: pd.DataFrame, table: str) -> pd.DataFrame:
-        """Apply proper data types to DataFrame columns based on table configuration"""
+        """Explicitly casts proper data types to DataFrame columns based on table configuration"""
         
         column_config = get_column_type_config(table)
         if not column_config:
             print(f"No column type configuration found for table: {table}")
             return df
         
-        # Cast string columns
         for col in column_config.string_columns:
             if col in df.columns:
                 df[col] = df[col].astype('string')
         
-        # Cast integer columns
         for col in column_config.integer_columns:
             if col in df.columns:
                 df[col] = df[col].astype('Int64')  # Nullable integer
         
-        # Cast float columns if defined
         if column_config.float_columns:
             for col in column_config.float_columns:
                 if col in df.columns:
                     df[col] = df[col].astype('Float64')  # Nullable float
         
-        # Cast boolean columns if defined
         if column_config.boolean_columns:
             for col in column_config.boolean_columns:
                 if col in df.columns:
@@ -238,6 +259,9 @@ class DatabaseConnection:
         
         return df
 
+
+
+        
     @classmethod
     def get_next_id_efficiently(cls, table: str) -> int:
         """Get next ID using Athena query instead of reading full table"""
@@ -272,7 +296,7 @@ class DatabaseConnection:
     @classmethod
     def execute_insert(cls, table: str, data: Dict[str, Any]) -> bool:
         """
-        Insert ONE row using awswrangler if available, fallback to original method
+        Insert a row using awswrangler if available, fallback to original method
         """
         if HAS_WRANGLER:
             return cls._execute_insert_awswrangler(table, data)
@@ -284,29 +308,11 @@ class DatabaseConnection:
     
     @classmethod
     def _execute_insert_awswrangler(cls, table: str, data: Dict[str, Any]) -> bool:
-        """Insert using awswrangler - need to set up fully, right now it's always falling back to the original version but that seems to work well so have been keeping as is"""
+        """Insert using awswrangler -"""
         try:
             print(f"=== STARTING AWSWRANGLER INSERT FOR {table} ===")
 
                     
-            # schemas = {
-            #     'institution': {
-            #         'id_institution_cpi': 'int',
-            #         'institution_cpi': 'string',
-            #         'institution_cpi_short': 'string',
-            #         'last_verified': 'int',
-            #         'institution_type_layer1': 'string',
-            #         'institution_type_layer2': 'string',
-            #         'institution_type_layer3': 'string',
-            #         'country_sub': 'string',
-            #         'country_parent': 'string',
-            #         'double_counting_risk': 'string',
-            #         'contact_info': 'string',
-            #         'comments': 'string',
-            #         'created_at': 'int',
-            #         'created_by': 'string'
-            #     }
-            # }
             
             id_column = get_table_id_column(table)
             if not id_column:
@@ -334,33 +340,7 @@ class DatabaseConnection:
             
             print(f"Inserting to S3 location: {s3_path}")
 
-            # # schema = schemas.get(table, {})
-            # #########################################
-            # if table == 'institution':
-            #     string_cols = [
-            #         'institution_cpi', 'institution_cpi_short',
-            #         'institution_type_layer1', 'institution_type_layer2', 'institution_type_layer3',
-            #         'country_sub', 'country_parent', 'double_counting_risk',
-            #         'contact_info', 'comments', 'created_by'
-            #     ]
-            #     int_cols = ['id_institution_cpi', 'last_verified', 'created_at']
-                
-            #     # Cast string columns
-            #     for col in string_cols:
-            #         if col in df_cleaned.columns:
-            #             df_cleaned[col] = df_cleaned[col].astype('string')
-                
-            #     # Cast integer columns
-            #     for col in int_cols:
-            #         if col in df_cleaned.columns:
-            #             df_cleaned[col] = df_cleaned[col].astype('Int64')
-
-            
-
-            #     ###################################
-
-            # df_cleaned = cls._apply_column_types(df_cleaned, table)
-            
+          
             wr.s3.to_parquet(
                 df=df_cleaned,
                 path=s3_path,
@@ -384,13 +364,16 @@ class DatabaseConnection:
         except Exception as e:
             print(f"AWSWRANGLER INSERT ERROR for {table}: {str(e)}")
             traceback.print_exc()
-            # Fallback to original method
             print("Falling back to original insert method")
             return cls._execute_insert_original(table, data)
+
+
+
+            
     
     @classmethod
     def _execute_insert_original(cls, table: str, data: Dict[str, Any]) -> bool:
-        """Fallback to original insert method if awswrangler fails"""
+        """Fallback to original insert method if awswrangler fails, much slower because it rewrites whole file - ORIGINAL VERSION"""
         try:
             print(f"=== USING ORIGINAL INSERT METHOD FOR {table} ===")
             
@@ -443,6 +426,11 @@ class DatabaseConnection:
             print(f"ORIGINAL INSERT ERROR for {table}: {str(e)}")
             traceback.print_exc()
             return False
+
+
+
+
+            
     
     @classmethod
     def bulk_insert(cls, table: str, data_list: List[Dict[str, Any]]) -> bool:
@@ -464,7 +452,6 @@ class DatabaseConnection:
 
             id_column = get_table_id_column(table)
             if not id_column:
-                # Fallback to auto-detection if not configured
                 existing_data = cls.get_table_data(table, limit=1) 
                 id_column, _ = get_next_id_for_table(existing_data, table)
                 
@@ -479,19 +466,8 @@ class DatabaseConnection:
                 records_with_ids.append(record_with_id)
             
             df_to_insert = pd.DataFrame(records_with_ids)
-            df_cleaned = cls._clean_dataframe_for_insert(df_to_insert)
+            df_cleaned = cls._clean_dataframe_for_insert(df_to_insert) #validation to get it into correct format
         
-            # existing_data = cls.get_table_data(table, limit=None)
-            # id_column, next_id = get_next_id_for_table(existing_data, table)
-            
-            # records_with_ids = []
-            # for i, record in enumerate(data_list):
-            #     record_with_id = record.copy()
-            #     record_with_id[id_column] = next_id + i
-            #     records_with_ids.append(record_with_id)
-            
-            # df_to_insert = pd.DataFrame(records_with_ids)
-            # df_cleaned = cls._clean_dataframe_for_insert(df_to_insert)
             
             if df_cleaned.empty:
                 print("No valid data to insert after cleaning")
@@ -528,12 +504,16 @@ class DatabaseConnection:
         except Exception as e:
             print(f"AWSWRANGLER BULK INSERT ERROR: {str(e)}")
             traceback.print_exc()
-            # Fallback to original method
             return cls._bulk_insert_original(table, data_list)
+
+
+
+
+            
     
     @classmethod
     def _bulk_insert_original(cls, table: str, data_list: List[Dict[str, Any]]) -> bool:
-        """Fallback bulk insert using original method"""
+        """Fallback bulk insert using original method - ORIGINAL VERSION"""
         try:
             if not data_list:
                 return True
@@ -584,10 +564,14 @@ class DatabaseConnection:
             print(f"ORIGINAL BULK INSERT ERROR: {str(e)}")
             traceback.print_exc()
             return False
+
+
+
+
     
     @classmethod
     def _write_parquet_file(cls, table_name: str, df: pd.DataFrame) -> bool:
-        """Write the complete DataFrame back to the S3 parquet file"""
+        """Write the complete DataFrame back to the S3 parquet file - ORIGINAL VERSION"""
         if table_name not in cls.TABLE_FILES:
             raise ValueError(f"Unknown table: {table_name}")
         
@@ -628,5 +612,5 @@ class DatabaseConnection:
 
 @st.cache_resource
 def get_cached_connection():
-    """Get a cached database connection that persists across Streamlit reruns - ORIGINAL VERSION"""
+    """Get a cached database connection that persists across Streamlit reruns"""
     return DatabaseConnection.get_connection()

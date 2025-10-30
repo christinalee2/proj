@@ -35,7 +35,8 @@ class InstitutionLookupService:
     PUBLIC_SUFFIXES = {
 
     }
-    
+
+    #Taken from ref table institution_suffixes
     PRIVATE_SUFFIXES = {
         'Ltd', 'LTD', 'Limited', 'Ltd.',
         'LLC', 'L.L.C', 'L.L.C.',
@@ -142,6 +143,9 @@ class InstitutionLookupService:
         self.valid_countries = valid_countries or []
         if self.valid_countries:
             print(f"Loaded {len(self.valid_countries)} valid countries from institution table")
+
+
+
     
     def detect_government_entity(self, institution_name: str) -> bool:
 
@@ -152,7 +156,10 @@ class InstitutionLookupService:
                 return True
         
         return False
-    
+
+
+
+        
     def detect_public_private_from_suffix(self, institution_name: str) -> Optional[str]:
         """
         Detects if institution is Public or Private based on just suffix
@@ -177,6 +184,10 @@ class InstitutionLookupService:
                 return 'Private'
         
         return None
+
+
+
+
     
     def _has_suffix(self, institution_name: str, suffix: str) -> bool:
         """
@@ -202,7 +213,11 @@ class InstitutionLookupService:
                 return True
         
         return False
-    
+
+
+
+
+        
     def match_country_to_institution_table(self, country_name: str) -> Optional[str]:
         """
         Matches a country name to valid institution table country entries. ISO mappings to help with abbreviations in search results

@@ -46,10 +46,10 @@ def get_audit_data(username: str) -> Dict[str, str]:
     Get audit data (created at, created by)
     
     Args:
-        username: Username performing the operation
+        username: username from sidebar performing the operation
         
     Returns:
-        Dictionary with audit fields
+        Dict with created_by and created_at fields
     """
     current_time = CURRENT_YEAR
     

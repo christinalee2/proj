@@ -1,5 +1,4 @@
 from typing import Dict, Optional, List, Any
-import uuid
 import pandas as pd
 from datetime import datetime
 
@@ -7,7 +6,6 @@ from database.queries import QueryService
 from database.cached_queries import get_all_institutions_cached
 from services.validation_service import ValidationService
 from services.standardization_service import StandardizationService
-from services.audit_service import AuditService
 from utils.text_processing import TextProcessor
 from config import CURRENT_YEAR
 
@@ -19,7 +17,6 @@ class InstitutionService:
         self.query_service = QueryService()
         self.validation_service = ValidationService()
         self.standardization_service = StandardizationService()
-        self.audit_service = AuditService()
     
     def create_institution(
         self,
@@ -41,16 +38,7 @@ class InstitutionService:
         Create a new institution with validation and enrichment - important to ensure types match parquet file
         
         Args:
-            institution_name: Name of the institution
-            institution_type_layer1: Private/Public
-            institution_type_layer2: Category (Funds, Corporation, etc.)
-            institution_type_layer3: Specific type
-            country_sub: Primary operating country
-            country_parent: HQ country
-            double_counting_risk: Double counting risk indicator
-            contact_info: Contact information
-            comments: Additional comments
-            user: User creating the institution
+            the different form inputs to the form 
             
         Returns:
             Dictionary with creation result and metadata
@@ -64,22 +52,8 @@ class InstitutionService:
             'message': ''
         }
         
-        # existing_institutions = get_all_institutions_cached()
-        
-        # validation = self.validation_service.validate_institution_entry(
-        #     institution_name,
-        #     existing_institutions
-        # )
-        # result['validation'] = validation
-        
-        # if validation['has_exact_duplicate']:
-        #     result['message'] = f"Institution already exists: {validation['exact_match']['institution_cpi']}"
-        #     return result
-        
-        # final_name = validation['normalized_name']
         
         final_name = TextProcessor.normalize_institution_name(institution_name)
-        # institution_id = str(uuid.uuid4())
         institution_short = TextProcessor.generate_short_name(final_name)
         
         institution_data = {
@@ -101,13 +75,12 @@ class InstitutionService:
         
         institution_data = {k: v for k, v in institution_data.items() if v is not None}
         
-        success = self.query_service.insert_institution(institution_data)
+        # success = self.query_service.insert_institution(institution_data)
+        success = self.query_service.execute_insert('institution', institution_data)
         
         if success:
-            # self.audit_service.log_insert('institution', institution_id, institution_data, user)
             
             result['success'] = True
-            # result['institution_id'] = institution_id
             result['institution_name'] = final_name
             result['message'] += 'Institution created successfully.'
         else:
@@ -121,14 +94,14 @@ class InstitutionService:
         user: str = "system"
     ) -> Dict[str, Any]:
         """
-        Create multiple institutions from a DataFrame
+        Create multiple institutions from a DataFrame, needs to
         
         Args:
             df: DataFrame with institution data
             user: User performing the bulk operation
             
-        Returns:
-            Dictionary with bulk creation results
+        Output:
+            Dict with bulk creation results
         """
         result = {
             'total_rows': len(df),
@@ -201,15 +174,6 @@ class InstitutionService:
         query: str,
         limit: int = 20
     ) -> pd.DataFrame:
-        """
-        Search for institutions by name prefix
-        
-        Args:
-            query: Search query
-            limit: Maximum results
-            
-        Returns:
-            DataFrame with matching institutions
-        """
+
         return self.query_service.search_institutions_by_prefix(query, limit)
     

@@ -55,7 +55,7 @@ def render_sidebar():
         st.subheader("User")
         username = st.text_input(
             "Username",
-            value=st.session_state.get('username', 'analyst'),
+            value=st.session_state.get('username', 'analyst'),   #name entered here should be used for new entries in created_by
             key="username_input"
         )
         st.session_state['username'] = username
@@ -80,21 +80,6 @@ def render_sidebar():
         
         st.markdown("---")
         
-        # st.subheader("Cache Management")
-        # col1, col2 = st.columns(2)
-        
-        # with col1:
-        #     if st.button("🔄 Clear Data Cache", help="Clear cached table data", use_container_width=True):
-        #         st.cache_data.clear()
-        #         st.success("Data cache cleared!")
-        #         st.rerun()
-        
-        # with col2:
-        #     if st.button("🔄 Clear All", help="Clear all caches", use_container_width=True):
-        #         st.cache_data.clear()
-        #         st.cache_resource.clear()
-        #         st.success("All caches cleared!")
-        #         st.rerun()
 
         st.subheader("Cache Management")
         col1, col2 = st.columns(2)
@@ -102,7 +87,7 @@ def render_sidebar():
         with col1:
             if st.button("🔄 Clear Data Cache", help="Clear cached table data", use_container_width=True):
                 st.cache_data.clear()
-                # Clear all table reference data from session state
+                # Clear all table reference data from session state, useful when there's a lot of new data etc.
                 keys_to_clear = [key for key in st.session_state.keys() if key.endswith('_reference_data')]
                 for key in keys_to_clear:
                     del st.session_state[key]
@@ -113,7 +98,6 @@ def render_sidebar():
             if st.button("🔄 Clear All", help="Clear all caches", use_container_width=True):
                 st.cache_data.clear()
                 st.cache_resource.clear()
-                # Clear all session state
                 keys_to_clear = [key for key in st.session_state.keys() if key.endswith('_reference_data')]
                 for key in keys_to_clear:
                     del st.session_state[key]

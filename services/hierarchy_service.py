@@ -9,21 +9,21 @@ from config import CURRENT_YEAR
 
 
 class HierarchyService:
-    """Handles hierarchy table operations including parent-child institution relationships"""
+    """Handles hierarchy table operations to match parent-child institution relationships"""
     
     def __init__(self):
         self.query_service = QueryService()
     
     def search_institution_for_hierarchy(self, query: str, existing_institutions: pd.DataFrame, limit: int = 10) -> List[Tuple[str, str, float]]:
         """
-        Search for institutions to use in hierarchy relationships with fuzzy matching
+        Search for institutions to use in hierarchy relationships with fuzzy matching, basically same process ot how institutions are checked for the main entry form
         
         Args:
-            query: Search term
-            existing_institutions: DataFrame of existing institutions
+            query: institution name typed in
+            existing_institutions: current institutions
             limit: Maximum number of results
             
-        Returns:
+        Output:
             List of tuples (institution_name, institution_id, score)
         """
         if existing_institutions.empty or query.strip() == "":
@@ -55,10 +55,10 @@ class HierarchyService:
                 tfidf_top_k=50
             )
             
-            # Convert to required format with IDs
+
             results = []
             for name, score in fuzzy_matches:
-                # Find the corresponding ID
+                # Find the corresponding ID for the parent/child, this will be input into the hierarchy under id_parent/child
                 matching_row = existing_institutions[
                     existing_institutions['institution_cpi'].str.lower() == name.lower()
                 ]
@@ -71,7 +71,10 @@ class HierarchyService:
         except Exception as e:
             print(f"Error in hierarchy institution search: {e}")
             return []
-    
+
+
+
+            
     def validate_hierarchy_entry(
         self,
         parent_institution: str,
@@ -81,17 +84,8 @@ class HierarchyService:
         existing_hierarchy: Optional[pd.DataFrame] = None
     ) -> Dict[str, Any]:
         """
-        Validate a hierarchy entry
-        
-        Args:
-            parent_institution: Name of parent institution
-            child_institution: Name of child institution
-            percent_ownership: Ownership percentage (0.0 to 1.0)
-            existing_institutions: DataFrame of existing institutions
-            existing_hierarchy: DataFrame of existing hierarchy records
-            
-        Returns:
-            Dictionary with validation results
+        Validate a hierarchy entry and outputs dict to be inserted
+
         """
         result = {
             'is_valid': True,
@@ -103,13 +97,12 @@ class HierarchyService:
             'normalized_child': None
         }
         
-        # Load data if not provided
         if existing_institutions is None:
             existing_institutions = get_table_data_cached('institution', limit=None)
         if existing_hierarchy is None:
             existing_hierarchy = get_table_data_cached('hierarchy', limit=None)
         
-        # Validate parent institution exists
+        # Validate parent institution exists so that the correct id_insittution_cpi will be added
         parent_match = self._find_institution_by_name(parent_institution, existing_institutions)
         if not parent_match:
             result['errors'].append(f"Parent institution '{parent_institution}' not found in institution table")
@@ -127,12 +120,11 @@ class HierarchyService:
             result['child_id'] = child_match['id']
             result['normalized_child'] = child_match['name']
         
-        # Check if parent and child are the same
+        # Check if parent and child are the same, not a good match if so
         if parent_institution.lower().strip() == child_institution.lower().strip():
             result['errors'].append("Parent and child institutions cannot be the same")
             result['is_valid'] = False
         
-        # Validate ownership percentage
         if percent_ownership is not None:
             if not isinstance(percent_ownership, (int, float)):
                 result['errors'].append("Ownership percentage must be a number")
@@ -151,6 +143,9 @@ class HierarchyService:
                 result['warnings'].append("This relationship already exists in the hierarchy table")
         
         return result
+
+
+
     
     def _find_institution_by_name(self, name: str, institutions_df: pd.DataFrame) -> Optional[Dict[str, str]]:
         """Find institution by name in the institutions DataFrame"""
@@ -168,6 +163,10 @@ class HierarchyService:
                 }
         
         return None
+
+
+
+
     
     def create_hierarchy_entry(
         self,
@@ -199,11 +198,10 @@ class HierarchyService:
             'validation': None
         }
         
-        # Set default ownership if not provided
+        # Defaults to 1
         if percent_ownership is None:
             percent_ownership = 1.0
         
-        # Validate the entry
         validation = self.validate_hierarchy_entry(
             parent_institution, child_institution, percent_ownership, existing_institutions, existing_hierarchy
         )
@@ -213,10 +211,9 @@ class HierarchyService:
             result['message'] = '; '.join(validation['errors'])
             return result
         
-        # Determine controlling status
+        # Determine controlling status, user can either click or will go if over 50%
         is_controlling = percent_ownership > 0.5 if percent_ownership is not None else False
         
-        # Prepare data for insertion
         hierarchy_data = {
             'id_parent': int(validation['parent_id']),
             'parent_institution': validation['normalized_parent'],
@@ -229,10 +226,8 @@ class HierarchyService:
             'created_at': CURRENT_YEAR
         }
         
-        # Clean None values
         hierarchy_data = {k: v for k, v in hierarchy_data.items() if v is not None}
         
-        # Insert into database
         success = self.query_service.execute_insert('hierarchy', hierarchy_data)
         
         if success:
@@ -242,6 +237,11 @@ class HierarchyService:
             result['message'] = 'Failed to insert hierarchy relationship into database'
         
         return result
+
+
+
+
+
     
     def get_next_hierarchy_id(self) -> int:
         """Get the next available hierarchy ID"""
@@ -255,7 +255,12 @@ class HierarchyService:
         except Exception as e:
             print(f"Error getting next hierarchy ID: {e}")
             return 1
-    
+
+
+
+
+
+            
     def get_institution_relationships(self, institution_name: str) -> Dict[str, List[Dict]]:
         """
         Get all relationships (parent and child) for an institution
@@ -321,7 +326,7 @@ class HierarchyService:
         user: str = "system"
     ) -> Dict[str, Any]:
         """
-        Create a hierarchy entry directly without validation (for newly created institutions)
+        Create a hierarchy entry directly without validation (for newly created institutions), this is necessary to avoid having to reload the full institution table which takes a long time
         
         Args:
             parent_id: ID of parent institution
@@ -341,7 +346,6 @@ class HierarchyService:
             'message': ''
         }
         
-        # Set default ownership if not provided
         if percent_ownership is None:
             percent_ownership = 1.0
         
@@ -354,10 +358,8 @@ class HierarchyService:
             result['message'] = "Ownership percentage must be between 0.0 and 1.0"
             return result
         
-        # Determine controlling status
         is_controlling = percent_ownership > 0.5
         
-        # Prepare data for insertion
         hierarchy_data = {
             'id_parent': int(parent_id),
             'parent_institution': parent_name,
@@ -370,10 +372,8 @@ class HierarchyService:
             'created_at': CURRENT_YEAR
         }
         
-        # Clean None values
         hierarchy_data = {k: v for k, v in hierarchy_data.items() if v is not None}
         
-        # Insert into database
         success = self.query_service.execute_insert('hierarchy', hierarchy_data)
         
         if success:

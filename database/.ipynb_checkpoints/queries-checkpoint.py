@@ -174,7 +174,7 @@ class QueryService:
     
     @staticmethod
     def insert_institution(data: Dict[str, Any]) -> bool:
-        """Legacy method for institution insertion"""
+        """Old method for institution insertion"""
         return DatabaseConnection.execute_insert('institution', data)
     
     @staticmethod

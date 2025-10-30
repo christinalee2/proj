@@ -5,7 +5,10 @@ import pandas as pd
 
 @dataclass
 class FieldConfig:
-    """Configuration for a single field"""
+    """Configuration for a single field in form
+    - have to be careful when setting field type, make sure it matches parquet schema otherwise will cause issues
+    - name is name of column in table, display_name is what you want it to show up as (institution_type_layer1 vs Type Layer 1)
+    """
     name: str
     display_name: str
     field_type: str  # 'text', 'select', 'number', 'boolean', 'textarea'
@@ -19,7 +22,7 @@ class FieldConfig:
 
 @dataclass
 class TableConfig:
-    """Configuration for a table upload interface"""
+    """Configuration for a table upload interface - this is for a whole new table"""
     table_name: str
     display_name: str
     description: str
@@ -78,7 +81,7 @@ AUDIT_FIELDS = [
 ]
 
 
-#Can add any tables you want to these, should produce a clean version 
+#Can add any tables you want to these - this will add a new table to the dropdown list of choices 
 TABLE_CONFIGS = {
     'institution': TableConfig(
         table_name='institution',
@@ -96,7 +99,7 @@ TABLE_CONFIGS = {
             FieldConfig('institution_type_layer2', 'Type Layer 2', 'select', category='main'),
             FieldConfig('institution_type_layer3', 'Type Layer 3', 'select', category='main'),
             FieldConfig('country_sub', 'Subsidiary Country', 'select', category='main',
-                       help_text='Country where institution operates'),
+                       help_text='Subsidiary country where institution operates'),
             FieldConfig('country_parent', 'Parent Country', 'select', category='main',
                        help_text='Country where headquarters is located'),
             FieldConfig('double_counting_risk', 'Double Counting Risk', 'select', category='main'),
@@ -378,7 +381,6 @@ def get_table_id_column(table_name: str) -> Optional[str]:
     """Get the ID column name for a specific table"""
     return TABLE_ID_COLUMNS.get(table_name)
 
-# Add helper functions
 def get_column_type_config(table_name: str) -> Optional[ColumnTypeConfig]:
     """Get column type configuration for a specific table"""
     return COLUMN_TYPE_CONFIGS.get(table_name)
