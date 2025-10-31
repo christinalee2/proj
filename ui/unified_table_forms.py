@@ -1411,11 +1411,10 @@ def render_enhanced_grid_row(result: ValidationResult, config: TableConfig, sess
                 
                 with info_col:
                     if lookup_result and lookup_result.sources:
-                        #should be a small button that's not too obtrusive
                         if hasattr(st, 'popover'):
                             with st.popover("📋", help=f"View {len(lookup_result.sources)} sources"):
                                 st.caption("**Sources used for lookup:**")
-                                for idx, source in enumerate(lookup_result.sources[:5], 1):  # Show top 3
+                                for idx, source in enumerate(lookup_result.sources[:5], 1):  # Show top 5
                                     title = source.get('title', 'Source')
                                     if len(title) > 40:
                                         title = title[:37] + "..."
@@ -1462,7 +1461,6 @@ def render_enhanced_grid_row(result: ValidationResult, config: TableConfig, sess
 
         
 def init_bulk_upload_session_state(session_key: str):
-    """Initialize session state for bulk upload"""
     for key in ['df', 'validation_results', 'edited_data', 'user_decisions', 'upload_complete', 'upload_results', 'pending_mappings']:
         if f'{session_key}_{key}' not in st.session_state:
             if key == 'pending_mappings':
@@ -1474,7 +1472,7 @@ def init_bulk_upload_session_state(session_key: str):
 
 
 def render_template_download(table_name: str, config: TableConfig):
-    """Render template download section"""
+    """General rules for configuring example excel download with example values"""
     with st.expander("Download Template"):
         template_data = {}
         for field_config in config.fields:
@@ -1516,6 +1514,7 @@ def render_template_download(table_name: str, config: TableConfig):
                     example_value = 'USA'
                 else:
                     example_value = f'Example {field_config.display_name}'
+
             
             template_data[field_config.name] = [example_value, '']
         

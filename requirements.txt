@@ -1,5 +1,6 @@
 streamlit
 affine
+cpi_tools
 scikit-learn
 anyio
 arrow
