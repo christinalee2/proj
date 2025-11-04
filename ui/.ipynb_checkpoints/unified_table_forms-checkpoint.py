@@ -37,7 +37,7 @@ def normalize_name(name: str) -> str:
 
 
 def check_exact_duplicate(input_value: str, existing_df: pd.DataFrame, primary_field: str, standardization_df: Optional[pd.DataFrame] = None) -> Optional[str]:
-    """Check for exact duplicate in institution table and institution_standardization table"""
+    """Check for exact duplicate in institution table and institution_standardization table then institution short for acronyms"""
     if existing_df.empty or primary_field not in existing_df.columns:
         return None
     
@@ -58,8 +58,73 @@ def check_exact_duplicate(input_value: str, existing_df: pd.DataFrame, primary_f
                         return existing_value
         except Exception as e:
             print(f"Error checking institution_standardization: {e}")
+
+    if primary_field == 'institution_cpi' and 'institution_cpi_short' in existing_df.columns: ##### Acronym checking
+            try:
+                for _, row in existing_df.iterrows():
+                    existing_short = str(row.get('institution_cpi_short', '')).strip()
+                    if existing_short and normalize_name(existing_short) == normalized_input:
+                        existing = str(row.get('institution_cpi', '')).strip()
+                        return f"{existing_short} found as {existing}"
+            except Exception as e:
+                print(f"Error checking institution_cpi_short: {e}")
     
     return None
+
+
+def check_compound_duplicate(form_data: Dict[str, Any], existing_df: pd.DataFrame, duplicate_check_fields: List[str]) -> Optional[str]:
+    """Check for exact duplicate using multiple fields like Germany, 2021, Wind for example"""
+    if existing_df.empty or not duplicate_check_fields:
+        return None
+    
+    missing_fields = [field for field in duplicate_check_fields if field not in existing_df.columns]
+    if missing_fields:
+        return None
+    
+    input_values = {}
+    for field in duplicate_check_fields:
+        value = form_data.get(field)
+        if value is None or str(value).strip() == '':
+            continue  # Skip empty values
+        
+        if isinstance(value, str):
+            input_values[field] = normalize_name(value) if field in ['institution_cpi', 'original_name'] else str(value).strip().lower()
+        else:
+            input_values[field] = str(value).strip()
+    
+    if not input_values:
+        return None
+    
+    for _, row in existing_df.iterrows():
+        match_count = 0
+        total_fields = len(input_values)
+        
+        for field, input_val in input_values.items():
+            existing_value = row.get(field)
+            if existing_value is None:
+                continue
+                
+            if isinstance(existing_value, str):
+                if field in ['institution_cpi', 'original_name']:
+                    existing_normalized = normalize_name(existing_value)
+                else:
+                    existing_normalized = str(existing_value).strip().lower()
+            else:
+                existing_normalized = str(existing_value).strip()
+            
+            if input_val == existing_normalized:
+                match_count += 1
+        
+        if match_count == total_fields and match_count > 0:
+            match_desc = []
+            for field in duplicate_check_fields:
+                if field in input_values:
+                    match_desc.append(f"{field}: {row.get(field, 'N/A')}")
+            return " | ".join(match_desc)
+    
+    return None
+
+
 
 
 def check_fuzzy_matches(input_value: str, existing_df: pd.DataFrame, primary_field: str) -> List[Tuple[str, float]]:
@@ -121,7 +186,9 @@ def render_lookup_sources_compact(lookup_result, key_suffix=""):
             
 
 def get_table_dropdown_options(table_name: str, config, existing_data: pd.DataFrame):
-
+    """
+    Dropdown options, for institution draws geography options from the table directly, otherwise loads from geography table directly as other lists are non-complete
+    """
     options = {}
     
     try:        
@@ -137,28 +204,40 @@ def get_table_dropdown_options(table_name: str, config, existing_data: pd.DataFr
             if field_config.field_type == 'select':
                 field_name = field_config.name
                 
-                # Mostly for country fields try to load from current table so geography table doesn't have to be loaded
-                if field_name in ['country_sub', 'country_parent', 'country_cpi']:
-                    if field_name in existing_data.columns:
-                        unique_values = existing_data[field_name].dropna().unique()
-                        unique_strings = sorted([str(v) for v in unique_values if str(v).strip()])
-                        if unique_strings: 
-                            options[field_name] = [''] + unique_strings
-                            continue
-                    
-                    # Only try geography table if current table has no country data and we specifically need geography data
-                    if table_name != 'geography': 
+                # Handle country fields
+                if field_name == 'country_cpi' and table_name != 'institution':
+                    if 'geography_countries' not in st.session_state:
                         try:
                             geo_data = get_table_data_cached('geography', limit=None)
                             if not geo_data.empty and 'country_cpi' in geo_data.columns:
                                 countries = sorted(geo_data['country_cpi'].dropna().unique())
-                                options[field_name] = [''] + [str(c) for c in countries]
+                                st.session_state['geography_countries'] = [str(c) for c in countries if str(c).strip()]
+                                print(f"Loaded {len(st.session_state['geography_countries'])} countries from geography table (cached in session)")
                             else:
-                                options[field_name] = ['']
+                                st.session_state['geography_countries'] = []
+                                print("Geography table empty or missing country_cpi column")
                         except Exception as e:
-                            # If geography table fails to load, just provide empty options
-                            print(f"Could not load geography data for {field_name}: {e}")
+                            print(f"Could not load geography data: {e}")
+                            st.session_state['geography_countries'] = []
+                    
+                    # Use cached geography countries
+                    if st.session_state['geography_countries']:
+                        options[field_name] = [''] + st.session_state['geography_countries']
+                    else:
+                        if field_name in existing_data.columns:
+                            unique_values = existing_data[field_name].dropna().unique()
+                            unique_strings = sorted([str(v) for v in unique_values if str(v).strip()])
+                            options[field_name] = [''] + unique_strings
+                            print(f"Fallback: using {len(unique_strings)} countries from {table_name} table")
+                        else:
                             options[field_name] = ['']
+                
+                elif field_name in ['country_sub', 'country_parent'] and table_name == 'institution':
+                    # Institution already has a complete list so avoids having to reload multiple times
+                    if field_name in existing_data.columns:
+                        unique_values = existing_data[field_name].dropna().unique()
+                        unique_strings = sorted([str(v) for v in unique_values if str(v).strip()])
+                        options[field_name] = [''] + unique_strings
                     else:
                         options[field_name] = ['']
                 
@@ -222,6 +301,7 @@ def create_table_entry(table_name: str, data: Dict[str, Any], user: str = "syste
             institution_type_layer3=data.get('institution_type_layer3'),
             country_sub=data.get('country_sub'),
             country_parent=data.get('country_parent'),
+            institution_cpi_short=data.get('institution_cpi_short'),
             double_counting_risk=data.get('double_counting_risk'),
             contact_info=data.get('contact_info'),
             comments=data.get('comments'),
@@ -247,10 +327,16 @@ def create_table_entry(table_name: str, data: Dict[str, Any], user: str = "syste
             clean_data['created_at'] = CURRENT_YEAR     # Explicit integer like institution service
             clean_data['created_by'] = user             # Explicit string like institution service
 
+            # year_fields = ['last_verified', 'year', 'year_added', 'year_of_analysis']
+            # for year_field in year_fields:
+            #     if any(field.name == year_field for field in config.fields):
+            #         clean_data[year_field] = CURRENT_YEAR  
+
             year_fields = ['last_verified', 'year', 'year_added', 'year_of_analysis']
             for year_field in year_fields:
                 if any(field.name == year_field for field in config.fields):
-                    clean_data[year_field] = CURRENT_YEAR  
+                    if year_field not in clean_data or not clean_data[year_field]:
+                        clean_data[year_field] = CURRENT_YEAR
 
             integer_fields = ['m49_code', 'iso_numeric_code']
             for field in integer_fields:
@@ -274,7 +360,7 @@ def create_table_entry(table_name: str, data: Dict[str, Any], user: str = "syste
                     'success': True,
                     'entry_id': clean_data.get(list(clean_data.keys())[0]),
                     'message': 'Entry created successfully',
-                    'new_id': new_id
+                    # 'new_id': new_id
                 }
             else:
                 return {
@@ -332,13 +418,13 @@ def render_form_field(field_config, dropdown_options: Dict[str, List[str]], key_
         )
     
     elif field_config.field_type == 'number':
-        if 'year' in field_config.name.lower():
+        if should_auto_populate_year(field_config.name):  
             return st.number_input(
                 field_config.display_name,
                 help=field_config.help_text,
                 key=field_key,
                 step=1,
-                value=None
+                value=default_value
             )
         else:
             return st.number_input(
@@ -494,7 +580,11 @@ def render_unified_single_entry_form(table_name: str):
                 fuzzy = check_fuzzy_matches(primary_value, existing_data, primary_field)
                 if fuzzy:
                     st.info(f"Found {len(fuzzy)} similar {config.display_name.lower()}(s)")
-                    st.caption("Similar entries found. Click 'Keep' to use your entry and create a standardization mapping.")
+                    # st.caption("Similar entries found. Click 'Keep' to use your entry and create a standardization mapping.")
+                    if config.has_standardization:
+                        st.caption("Similar entries found. Click 'Keep' to use your entry and create a standardization mapping.")
+                    else:
+                        st.caption("Similar entries found.")
 
         
                     for i, (name, score) in enumerate(fuzzy):
@@ -516,25 +606,26 @@ def render_unified_single_entry_form(table_name: str):
                             st.text(f"• {name}{detail_str} - {score * 100:.1f}% match")
                        
                         with col2:
-                            if st.button("Keep", key=f"keep_{table_name}_{i}", help=f"Use '{primary_value}' and map to '{name}'"):
-                                if table_name == 'institution':
-                                    result = standardization_service.process_keep_institution(primary_value, name, standardization_data, existing_data)
-                                elif table_name == 'geography':
-                                    result = standardization_service.process_keep_geography(primary_value, name)
-                                else:
-                                    result = {'success': False, 'message': 'Keep functionality not available for this table'}
-                                
-                                if result['success']:
-                                    st.success(result['message'])
-                                    st.info(f"Added to standardization table.")
-
-                                    st.session_state['hierarchy_match_name'] = name  # The specific match that was kept
-                                    st.session_state['hierarchy_match_type'] = 'kept'
-                                    st.session_state['show_hierarchy_form'] = True
+                            if config.has_standardization:
+                                if st.button("Keep", key=f"keep_{table_name}_{i}", help=f"Use '{primary_value}' and map to '{name}'"):
+                                    if table_name == 'institution':
+                                        result = standardization_service.process_keep_institution(primary_value, name, standardization_data, existing_data)
+                                    elif table_name == 'geography':
+                                        result = standardization_service.process_keep_geography(primary_value, name)
+                                    else:
+                                        result = {'success': False, 'message': 'Keep functionality not available for this table'}
                                     
-                                    st.rerun()
-                                else:
-                                    st.error(result['message'])
+                                    if result['success']:
+                                        st.success(result['message'])
+                                        st.info(f"Added to standardization table.")
+    
+                                        st.session_state['hierarchy_match_name'] = name  # The specific match that was kept
+                                        st.session_state['hierarchy_match_type'] = 'kept'
+                                        st.session_state['show_hierarchy_form'] = True
+                                        
+                                        st.rerun()
+                                    else:
+                                        st.error(result['message'])
                                 
                                 # st.rerun()
                             
@@ -800,8 +891,8 @@ def render_unified_single_entry_form(table_name: str):
                 
                 st.rerun()
     
-    st.markdown("---")
-    st.subheader(f"{config.display_name} Details")
+    # st.markdown("---")
+    # st.subheader(f"{config.display_name} Details")
     
     form_data = {}
     if primary_field_config:
@@ -813,14 +904,14 @@ def render_unified_single_entry_form(table_name: str):
     advanced_fields = [f for f in remaining_fields if getattr(f, 'category', 'main') == 'advanced']
     
     if required_fields:
-        st.subheader("Required Fields")
+        # st.subheader("Required Fields")
         cols = st.columns(2)
         for i, field_config in enumerate(required_fields):
             with cols[i % 2]:
                 form_data[field_config.name] = render_form_field(field_config, dropdown_options, f"{table_name}_req_{i}")
     
     if optional_main_fields:
-        st.subheader("Optional Fields")
+        st.subheader("Secondary Fields")
         cols = st.columns(2)
         for i, field_config in enumerate(optional_main_fields):
             with cols[i % 2]:
@@ -833,6 +924,27 @@ def render_unified_single_entry_form(table_name: str):
                 with cols[i % 2]:
                     form_data[field_config.name] = render_form_field(field_config, dropdown_options, f"{table_name}_adv_{i}")
 
+
+
+    # Real-time compound duplicate checking for tables with multiple duplicate check fields
+    if config.duplicate_check_fields and len(config.duplicate_check_fields) > 1:
+        # Check if we have values for multiple duplicate check fields
+        compound_check_values = {}
+        for field_name in config.duplicate_check_fields:
+            value = form_data.get(field_name)
+            if value is not None and str(value).strip():
+                compound_check_values[field_name] = value
+        
+        # Only check if we have at least 2 values filled out
+        if len(compound_check_values) >= 2:
+            compound_duplicate = check_compound_duplicate(form_data, existing_data, config.duplicate_check_fields)
+            if compound_duplicate:
+                st.error(f"Duplicate entry found: {compound_duplicate}")
+                st.caption("This exact combination of values already exists in the database.")
+    
+    
+
+    
     # Add hierarchy form for new institutions
     hierarchy_form_data = None
     if table_name == 'institution':
@@ -1495,15 +1607,31 @@ def render_template_download(table_name: str, config: TableConfig):
                     example_value = f'Description of this {field_config.display_name.lower()}'
                 elif field_config.name in ['comments', 'notes']:
                     example_value = 'Additional notes or comments'
+                elif field_config.name in 'contact_info':
+                    example_value = 'Emails, names, etc.'
                 else:
                     example_value = f'Example {field_config.display_name}'
             else:  # text fields
                 if 'country' in field_config.name.lower():
-                    example_value = 'United States'
+                    example_value = 'United States of America'
+                elif 'country_sub' in field_config.name.lower():
+                    example_value = 'United States of America'
+                elif 'country_parent' in field_config.name.lower():
+                    example_value = 'United States of America'
                 elif 'currency' in field_config.name.lower():
                     example_value = 'USD'
-                elif 'institution' in field_config.name.lower():
-                    example_value = 'Example Institution Name'
+                elif 'institution_cpi' in field_config.name.lower():
+                    example_value = 'AES Corp'
+                elif 'institution_cpi_short' in field_config.name.lower():
+                    example_value = 'AES'
+                elif 'institution_original' in field_config.name.lower():
+                    example_value = 'AES'
+                elif 'institution_type_layer1' in field_config.name.lower():
+                    example_value = 'Private'
+                elif 'institution_type_layer2' in field_config.name.lower():
+                    example_value = 'Corporation'
+                elif 'institution_type_layer3' in field_config.name.lower():
+                    example_value = 'Corporate'
                 elif field_config.name in ['sector_re', 'sub_sector_source', 'sub_sector_bnef']:
                     example_value = 'Solar'
                 elif field_config.name in ['instrument_original', 'instrument_type']:
@@ -1843,10 +1971,15 @@ def execute_unified_bulk_insert(validation_results: List[ValidationResult], conf
                     from table_configs import get_table_config
                     config = get_table_config(table_name)
                     if config:
-                        year_fields = ['last_verified', 'year', 'year_added']
+                        # year_fields = ['last_verified', 'year', 'year_added']
+                        # for year_field in year_fields:
+                        #     if any(field.name == year_field for field in config.fields):
+                        #         data_to_insert[year_field] = CURRENT_YEAR
+                        year_fields = ['last_verified', 'year', 'year_added', 'year_of_analysis'] 
                         for year_field in year_fields:
                             if any(field.name == year_field for field in config.fields):
-                                data_to_insert[year_field] = CURRENT_YEAR
+                                if year_field not in data_to_insert or not data_to_insert[year_field]:
+                                    data_to_insert[year_field] = CURRENT_YEAR
 
                     integer_fields = ['m49_code', 'iso_numeric_code']
                     for field in integer_fields:
@@ -2071,6 +2204,7 @@ def render_institution_submission_with_hierarchy(
                 country_sub=enhanced_data.get('country_sub'),
                 country_parent=enhanced_data.get('country_parent'),
                 double_counting_risk=enhanced_data.get('double_counting_risk'),
+                institution_cpi_short=enhanced_data.get('institution_cpi_short'),
                 contact_info=enhanced_data.get('contact_info'),
                 comments=enhanced_data.get('comments'),
                 user=username
@@ -2154,24 +2288,65 @@ def render_standard_submission(
         username = st.session_state.get('username', 'analyst')
         
         if config.duplicate_check_fields:
-            primary_field = config.duplicate_check_fields[0]
-            input_value = form_data.get(primary_field)
-            
-            if input_value:
-                exact_duplicate = check_exact_duplicate(input_value, existing_data, primary_field)
+            if len(config.duplicate_check_fields) > 1:
+                # Use compound duplicate checking for multiple fields
+                compound_duplicate = check_compound_duplicate(form_data, existing_data, config.duplicate_check_fields)
                 
-                if exact_duplicate:
-                    st.error(f"Entry already exists: {exact_duplicate}")
+                if compound_duplicate:
+                    st.error(f"Entry already exists with these values: {compound_duplicate}")
                     return
                 
-                fuzzy_matches = check_fuzzy_matches(input_value, existing_data, primary_field)
-                if fuzzy_matches:
-                    st.warning(f"Found {len(fuzzy_matches)} similar entries:")
-                    for name, score in fuzzy_matches[:3]:
-                        st.write(f"- {name} ({score:.1f}% match)")
+                # Also check fuzzy matches on the primary field for suggestions
+                primary_field = config.duplicate_check_fields[0]
+                input_value = form_data.get(primary_field)
+                if input_value:
+                    fuzzy_matches = check_fuzzy_matches(input_value, existing_data, primary_field)
+                    if fuzzy_matches:
+                        st.warning(f"Found {len(fuzzy_matches)} similar entries for '{primary_field}':")
+                        for name, score in fuzzy_matches[:3]:
+                            st.write(f"- {name} ({score:.1f}% match)")
+                        
+                        if not st.button("Continue Anyway", key="continue_despite_fuzzy"):
+                            return
+            else:
+                # Use single field duplicate checking (existing logic)
+                primary_field = config.duplicate_check_fields[0]
+                input_value = form_data.get(primary_field)
+                
+                if input_value:
+                    exact_duplicate = check_exact_duplicate(input_value, existing_data, primary_field)
                     
-                    if not st.button("Continue Anyway", key="continue_despite_fuzzy"):
+                    if exact_duplicate:
+                        st.error(f"Entry already exists: {exact_duplicate}")
                         return
+                    
+                    fuzzy_matches = check_fuzzy_matches(input_value, existing_data, primary_field)
+                    if fuzzy_matches:
+                        st.warning(f"Found {len(fuzzy_matches)} similar entries:")
+                        for name, score in fuzzy_matches[:3]:
+                            st.write(f"- {name} ({score:.1f}% match)")
+                        
+                        # if not st.button("Continue Anyway", key="continue_despite_fuzzy"):
+                        #     return
+                            
+            # primary_field = config.duplicate_check_fields[0]
+            # input_value = form_data.get(primary_field)
+            
+            # if input_value:
+            #     exact_duplicate = check_exact_duplicate(input_value, existing_data, primary_field)
+                
+            #     if exact_duplicate:
+            #         st.error(f"Entry already exists: {exact_duplicate}")
+            #         return
+                
+            #     fuzzy_matches = check_fuzzy_matches(input_value, existing_data, primary_field)
+            #     if fuzzy_matches:
+            #         st.warning(f"Found {len(fuzzy_matches)} similar entries:")
+            #         for name, score in fuzzy_matches[:3]:
+            #             st.write(f"- {name} ({score:.1f}% match)")
+                    
+            #         if not st.button("Continue Anyway", key="continue_despite_fuzzy"):
+            #             return
         
         enhanced_data = auto_populate_data(form_data, username)
         

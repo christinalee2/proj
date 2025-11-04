@@ -13,12 +13,12 @@ def render_institution_search_widget(
     placeholder: str = "Start typing to search institutions..."
 ) -> Tuple[Optional[str], Optional[str]]:
     """
-    Render an institution search widget with fuzzy matching
+    Render search to find institutions by exact/fuzzy match
     
     Args:
         key: Unique key for the widget
         label: Display label
-        existing_institutions: DataFrame of existing institutions
+        existing_institutions: df of existing institutions
         help_text: Optional help text
         placeholder: Placeholder text
         
@@ -236,7 +236,6 @@ def render_hierarchy_options_for_duplicates(
     """
     st.info("💡 Since this institution already exists, you can create a hierarchy relationship:")
     
-    # Find the existing institution ID
     existing_inst = existing_institutions[
         existing_institutions['institution_cpi'].str.lower() == duplicate_name.lower()
     ]
@@ -247,7 +246,6 @@ def render_hierarchy_options_for_duplicates(
     
     existing_id = str(existing_inst.iloc[0].get('id_institution_cpi', ''))
     
-    # Radio button for relationship type
     relationship_choice = st.radio(
         "What type of relationship do you want to create?",
         ["Parent Institution", "Child Institution"],
@@ -354,7 +352,6 @@ def render_new_institution_hierarchy_option(
     with st.expander("🔗 Add Hierarchy Relationship (Optional)", expanded=False):
         st.write("Create a parent-child relationship for this new institution")
         
-        # Radio button for relationship type
         relationship_choice = st.radio(
             "How should this new institution be related?",
             ["As Parent Institution", "As Child Institution", "No Relationship"],
@@ -368,7 +365,6 @@ def render_new_institution_hierarchy_option(
             # New institution will be parent
             st.write(f"**{institution_name}** will be the PARENT institution")
             
-            # Search for child institution
             child_name, child_id = render_institution_search_widget(
                 key=f"{form_key}_new_child",
                 label="Select Child Institution",

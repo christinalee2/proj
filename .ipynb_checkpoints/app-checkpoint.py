@@ -37,7 +37,7 @@ st.markdown("""
 
 
 def initialize_session_state():
-    """Initialize session state variables"""
+    """Initializes default page variables"""
     if 'current_page' not in st.session_state:
         st.session_state['current_page'] = 'Upload New Data'
     if 'username' not in st.session_state:
@@ -72,8 +72,10 @@ def render_sidebar():
             ],
             key="navigation",
             index=0 if st.session_state['current_page'] == 'Upload New Data' 
-                  else 1 if st.session_state['current_page'] == 'View Current Tables'
-                  else 2  
+                else 1 if st.session_state['current_page'] == 'View Current Tables'
+                else 2
+                  # else 1
+                #else 2
         )
         
         st.session_state['current_page'] = page
@@ -109,7 +111,7 @@ def render_sidebar():
             st.markdown("---")
             if st.button("🔄 Reset NZFT Session", help="Clear NZFT matching data", use_container_width=True):
                 reset_nzft_session()
-                st.success("NZFT session cleared!")
+                st.success("NZFT session reset!")
                 st.rerun()
         
         st.caption("Data cached for 2-4 hours")
@@ -117,16 +119,15 @@ def render_sidebar():
         
         st.markdown("---")
         
-        st.caption(f"Version 2.0.0")
         st.caption(f"Last updated: {datetime.now().strftime('%Y-%m-%d')}")
     
     return st.session_state['current_page']
 
 
 def render_upload_page():
-    """Render the upload page with table selection and forms"""
+    """Render the upload page, lets you select table and single/bulk entry"""
     st.header("Upload New Data")
-    st.markdown("Select a table and upload your data")
+    st.markdown("This tool lets you add new data to the CPI reference tables. You can upload a single entry or import multiple records at once, depending on your needs. All submissions are reviewed by the research team before being finalized. To help ensure accuracy, please review the [reference table documentation](https://www.notion.so/cpi-all/Reference-Tables-1f3efb28632b80b4b53dec019a97d70a) before uploading.")
     st.markdown("---")
     
     # Table selection
@@ -147,6 +148,10 @@ def render_upload_page():
     
     selected_table = selected_display.split(' (')[-1].rstrip(')')
     st.session_state['selected_table'] = selected_table
+
+    config = get_table_config(selected_table)
+    if config and hasattr(config, 'general_description') and config.general_description:
+        st.markdown(f"{config.general_description}")
     
     
     st.markdown("---")
@@ -171,10 +176,8 @@ def render_upload_page():
 
 def render_table_view(table_name: str):
     """
-    Render table data view for any table
-    
-    Args:
-        table_name: Name of the table
+    Render table view for tables -- not showing up currently, may just delete if we dont wnat this
+
     """
     config = get_table_config(table_name)
     if not config:
@@ -189,6 +192,7 @@ def render_table_view(table_name: str):
     with col1:
         st.markdown("")  
     with col2:
+        #To refresh session state data, gets out of cache
         if st.button("🔄 Refresh Data", help="Force reload from database", use_container_width=True):
             st.cache_data.clear()
             
@@ -292,7 +296,7 @@ def render_table_view(table_name: str):
 
 
 def render_view_tables_page():
-    """Render the view tables page"""
+    """Render the view tables page -- also may delete"""
     st.header("View Current Tables")
     st.markdown("Browse your reference data")
     st.markdown("---")
@@ -314,6 +318,10 @@ def render_view_tables_page():
     
     selected_table = selected_display.split(' (')[-1].rstrip(')')
     st.session_state['selected_table'] = selected_table
+
+    config = get_table_config(selected_table)
+    if config and hasattr(config, 'general_description') and config.general_description:
+        st.markdown(f"{config.general_description}")
     
     st.markdown("---")
     

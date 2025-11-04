@@ -26,6 +26,7 @@ class TableConfig:
     table_name: str
     display_name: str
     description: str
+    general_description: str 
     primary_key_field: str
     required_fields: List[str]
     fields: List[FieldConfig]
@@ -33,11 +34,12 @@ class TableConfig:
     has_bulk_upload: bool = True
     custom_validation_fn: Optional[callable] = None
     duplicate_check_fields: Optional[List[str]] = None
+    has_standardization: bool = False
 
 
 @dataclass
 class ColumnTypeConfig:
-    """Configuration for column data types for AWS Wrangler"""
+    """Configuration for column data types for AWS Wrangler, useful to cast explicitly"""
     string_columns: List[str]
     integer_columns: List[str]
     float_columns: Optional[List[str]] = None
@@ -45,7 +47,6 @@ class ColumnTypeConfig:
 
 
 def validate_year(value: Any) -> bool:
-    """Validate year is reasonable"""
     if not value:
         return True
     try:
@@ -56,7 +57,6 @@ def validate_year(value: Any) -> bool:
 
 
 def validate_decimal(value: Any) -> bool:
-    """Validate decimal format"""
     if not value:
         return True
     try:
@@ -67,7 +67,6 @@ def validate_decimal(value: Any) -> bool:
 
 
 def validate_boolean(value: Any) -> bool:
-    """Validate boolean values"""
     if value is None or value == '':
         return True
     return str(value).lower() in ['true', 'false', '1', '0', 'yes', 'no']
@@ -86,7 +85,9 @@ TABLE_CONFIGS = {
     'institution': TableConfig(
         table_name='institution',
         display_name='Institution',
-        description='Enter institution. If institution already exists in database, do not upload again. If there is a non-exact match click Keep to add to standardization table.',
+        has_standardization=True,
+        description='Before adding a new institution, first ensure the institution does not currently exist in the reference tables. Search multiple variations of the institution name, including the full name and acronym, i.e., for the IMF, search for both IMF and International Monetary Fund.  If there is a non-exact match, click Keep to add to standardization table.',
+        general_description='Institution maps standardized institution names to their institution type (layer 1: public/private; layer 2: e.g., commercial FI, multilateral climate fund) and links each to a parent or subsidiary country. See [documentation](https://www.notion.so/cpi-all/institution_list_cpi-28fefb28632b804b8b96fb7ca466937e) for details.', 
         primary_key_field='id_institution_cpi',
         required_fields=['institution_cpi'],
         duplicate_check_fields=['institution_cpi'],
@@ -95,15 +96,14 @@ TABLE_CONFIGS = {
                        help_text='Full name of the institution',
                        placeholder='Enter institution name...'),
             FieldConfig('institution_type_layer1', 'Type Layer 1', 'select', category='main',
-                       help_text='Public or Private classification'),
-            FieldConfig('institution_type_layer2', 'Type Layer 2', 'select', category='main'),
-            FieldConfig('institution_type_layer3', 'Type Layer 3', 'select', category='main'),
+                       help_text='Public or Private classification', required=True),
+            FieldConfig('institution_type_layer2', 'Type Layer 2', 'select', category='main', help_text='Institution maps standardized institution names to their institution type (layer 1: public/private; layer 2: e.g., commercial FI, multilateral climate fund) and links each to a parent or subsidiary country. See [documentation](https://www.notion.so/cpi-all/institution_list_cpi-28fefb28632b804b8b96fb7ca466937e) for details. \nInstitution maps standardized institution names to their institution type (layer 1: public/private; layer 2: e.g., commercial FI, multilateral climate fund) and links each to a parent or subsidiary country. See [documentation](https://www.notion.so/cpi-all/institution_list_cpi-28fefb28632b804b8b96fb7ca466937e) for details. \nInstitution maps standardized institution names to their institution type (layer 1: public/private; layer 2: e.g., commercial FI, multilateral climate fund) and links each to a parent or subsidiary country. See [documentation](https://www.notion.so/cpi-all/institution_list_cpi-28fefb28632b804b8b96fb7ca466937e) for details.', required=True),
+            FieldConfig('institution_type_layer3', 'Type Layer 3', 'select', category='main', required=True),
             FieldConfig('country_sub', 'Subsidiary Country', 'select', category='main',
-                       help_text='Subsidiary country where institution operates'),
+                       help_text='Subsidiary country where institution operates', required=True),
             FieldConfig('country_parent', 'Parent Country', 'select', category='main',
-                       help_text='Country where headquarters is located'),
+                       help_text='Country where headquarters is located', required=True),
             FieldConfig('double_counting_risk', 'Double Counting Risk', 'select', category='main'),
-            
             FieldConfig('institution_cpi_short', 'Short Name', 'text', category='advanced',
                        help_text='Abbreviated name (for known acronyms/shortened forms)'),
             FieldConfig('contact_info', 'Contact Information', 'textarea',category='advanced',
@@ -113,6 +113,145 @@ TABLE_CONFIGS = {
         ] + AUDIT_FIELDS
     ),
     
+    'instrument': TableConfig(
+        table_name='instrument',
+        display_name='Instrument',
+        description='Add the name of the instrument as it is in source. Do not enter duplicates. Information quality refers to the status of the information e.g. "Introduced in 2021" or "Removed in 2022"',
+        general_description='Documentation incoming.', 
+        primary_key_field='id_instrument',
+        required_fields=['original_name'],
+        duplicate_check_fields=['original_name'],
+        fields=[
+            FieldConfig('original_name', 'Original Instrument Name (from source)', 'text', required=True,
+                       help_text='Type of financial instrument',
+                       placeholder='Enter instrument name...'),
+            FieldConfig('original_name_2', 'Original Name 2', 'text', category='main'),
+            FieldConfig('original_name_3', 'Original Name 3', 'text', category='main'),
+            FieldConfig('instrument_type', 'Instrument Type', 'select', category='main',
+                       help_text='Type of financial instrument',
+                       placeholder='Enter instrument type...', required=True),
+            FieldConfig('instrument_type_layer2', 'Type Layer 2', 'select', category='main', required=True),
+            FieldConfig('definition', 'Definition', 'textarea',
+                       help_text='Clear definition of this instrument', category='main'),
+            FieldConfig('info_quality', 'Information Quality', 'text', category='main',
+                       help_text='Status of information', required=True),
+            FieldConfig('categorization', 'Categorization', 'select', category='main', required=True),
+            FieldConfig('description', 'Description', 'textarea',
+                       help_text='Detailed description', category='main'),
+            FieldConfig('example', 'Example', 'textarea',
+                       help_text='Example of this instrument in use', category='main'),
+        ] + AUDIT_FIELDS
+    ),
+
+    'gearing': TableConfig(
+        table_name='gearing',
+        display_name='Gearing Ratios',
+        description='Enter gearing ratio as decimal, debt:equity.',
+        general_description='Gearing ratios by country, year, and sector. See [documentation](https://www.notion.so/cpi-all/Gearing-287efb28632b80529bfef8ccfc97de17) for details.', 
+        primary_key_field='id_gearing',
+        required_fields=['sector_re'],
+        duplicate_check_fields=['gearing', 'sector_re', 'country_cpi', 'last_verified'],
+        fields=[
+            FieldConfig('sector_re', 'Sector', 'select', category='main', required=True,
+                       help_text='Sector'),
+            FieldConfig('country_cpi', 'Country', 'select', category='main',
+                       help_text='Country', required=True),
+            FieldConfig('region_cpi', 'Region', 'select', category='main', required=True),
+            FieldConfig('gearing', 'Gearing Ratio', 'number', category='main', required=True),
+            FieldConfig('source', 'Source', 'test', category='main', required=True),
+            FieldConfig('last_verified', 'Year', 'number', category='main', required=True)  
+        ] + AUDIT_FIELDS
+    ),
+
+    'multiplier': TableConfig(
+        table_name='multiplier',
+        display_name='Multipliers',
+        description='Multiplier - update',
+        general_description='Multipliers by sector and country. See [documentation](https://www.notion.so/cpi-all/Multiplier-287efb28632b80838219d6fa2b3b50dc) for details.', 
+        primary_key_field='id_multiplier',
+        required_fields=['sub_sector_source'],
+        duplicate_check_fields=['sub_sector_bnef', 'country', 'year_of_analysis'],
+        fields=[
+            FieldConfig('sub_sector_source', 'Sub-sector name (from source)', 'text', required=True),
+            FieldConfig('multiplier_local', 'Local Multiplier', 'number', category='main', required=True),
+            FieldConfig('sub_sector_bnef', 'Sub-sector name (BNEF)', 'select', category='main', required=True),
+            FieldConfig('country_cpi', 'Country', 'select', category='main', required=True),
+            FieldConfig('region_cpi', 'Region', 'select', category='main', required=True),
+            FieldConfig('currency', 'Currency', 'select', category='main', required=True),
+            FieldConfig('conversion_rate', 'Conversion', 'select'),
+            FieldConfig('multiplier_usd', 'Multiplier in USD', 'number', category='main', required=True),
+            FieldConfig('data_source_type', 'Data Source', 'select', category='main', required=True),
+            FieldConfig('notes', 'Notes', 'text', category='main'),
+            FieldConfig('last_verified', 'Last verified', 'number'),
+            FieldConfig('year_of_analysis', 'Year of analysis', 'number', category='main', required=True)  
+        ] + AUDIT_FIELDS
+    ),
+
+    
+    # 'exchange_rates': TableConfig(
+    #     table_name='exchange_rates',
+    #     display_name='Exchange Rates',
+    #     description='Currency exchange rates by country and year',
+    #     general_description='Exchange rates by country and year. Documentation incoming.', 
+    #     primary_key_field='id_fx',
+    #     required_fields=['country_cpi'],
+    #     duplicate_check_fields=['country_cpi', 'year'],
+    #     fields=[
+    #         FieldConfig('country_cpi', 'Country', 'select',
+    #                    required=True,
+    #                    help_text='Country for this exchange rate'),
+    #         FieldConfig('currency_code', 'Currency Code', 'text', category='main',
+    #                    help_text='3-letter currency code (USD, EUR, etc.)',
+    #                    placeholder='USD, EUR, GBP...'),
+    #         FieldConfig('fx_rate', 'Exchange Rate', 'number', category='main',
+    #                    validation_fn=validate_decimal,
+    #                    help_text='Exchange rate to USD'),
+    #         FieldConfig('year', 'Year', 'number',category='main')  
+    #     ] + AUDIT_FIELDS
+    # ), 
+    
+    'institution_standardization': TableConfig(
+        table_name='institution_standardization',
+        display_name='Institution Standardization',
+        description='Standardization table for institutions. Typically no need to edit directly. If you are adding a value, the standardized name needs to be the name exactly as it is in the institution table.',
+        general_description='Institution standardization links institution names found in raw data sources to standardised CPI institution names. See [documentation](https://www.notion.so/cpi-all/institution_list_all-28fefb28632b8051b09ee27a17d8b6c7) for details.', 
+        primary_key_field='id_institution',
+        required_fields=['institution_original'],
+        duplicate_check_fields=['institution_cpi', 'institution_original'],
+        fields=[
+            FieldConfig('institution_original', 'Institution Name', 'text', required=True,
+                       help_text='Full name of the institution',
+                       placeholder='Enter institution name...'),
+            FieldConfig('institution_cpi', 'Institution Standardized Name', 'select', category='main',
+                       help_text='Only enter if you know the mapping for standardization already or adding a new institution.'),
+        ] + AUDIT_FIELDS
+    ),
+
+    'hierarchy': TableConfig(
+        table_name='hierarchy',
+        display_name='Institution Hierarchy',
+        description='Define parent-child relationships between institutions. Ownership defaults to 1 but can input proportion as a decimal. Controlling institution automatically selected for proportions over 0.5.',
+        general_description='Hierarchy table describes relationships between institutions (e.g. government branches, subsidiaries, etc.) Documentation incoming.', 
+        primary_key_field='id_hierarchy',
+        required_fields=['parent_institution', 'child_institution'],
+        duplicate_check_fields=['id_parent', 'id_child'],
+        fields=[
+            FieldConfig('parent_institution', 'Parent Institution', 'text', required=True,
+                       help_text='Name of the parent institution (must exist in institution table)',
+                       placeholder='Search for parent institution...'),
+            FieldConfig('child_institution', 'Child Institution', 'text', required=True,
+                       help_text='Name of the child institution (must exist in institution table)',
+                       placeholder='Search for child institution...'),
+            FieldConfig('percent_ownership', 'Ownership Percentage', 'number', 
+                       help_text='Ownership percentage as decimal (0.0 to 1.0, e.g., 0.51 for 51%)'),
+            FieldConfig('is_controlling_institution', 'Is Controlling', 'boolean',
+                       help_text='True if parent has controlling interest (>50% ownership)'),
+            FieldConfig('relationship_type', 'Relationship Type', 'text',
+                       help_text='Type of relationship (e.g., "subsidiary", "division", "branch")',
+                       placeholder='Enter relationship type...'),
+        ] + AUDIT_FIELDS
+    ),
+
     # 'geography': TableConfig(
     #     table_name='geography',
     #     display_name='Geography',
@@ -157,138 +296,6 @@ TABLE_CONFIGS = {
     #     ] + AUDIT_FIELDS
     # ),
 
-    
-    'instrument': TableConfig(
-        table_name='instrument',
-        display_name='Instrument',
-        description='Instruments',
-        primary_key_field='id_instrument',
-        required_fields=['original_name'],
-        duplicate_check_fields=['original_name'],
-        fields=[
-            FieldConfig('original_name', 'Original Instrument Name (from source)', 'text', required=True,
-                       help_text='Type of financial instrument',
-                       placeholder='Enter instrument name...'),
-            FieldConfig('instrument_type', 'Instrument Type', 'select', category='main',
-                       help_text='Type of financial instrument',
-                       placeholder='Enter instrument type...'),
-            FieldConfig('instrument_type_layer2', 'Type Layer 2', 'select', category='main'),
-            FieldConfig('definition', 'Definition', 'textarea',
-                       help_text='Clear definition of this instrument', category='main'),
-            FieldConfig('info_quality', 'Information Quality', 'text', category='main',
-                       help_text='Status of information'),
-            FieldConfig('categorization', 'Categorization', 'select', category='main'),
-            FieldConfig('description', 'Description', 'textarea',
-                       help_text='Detailed description', category='main'),
-            FieldConfig('example', 'Example', 'textarea',
-                       help_text='Example of this instrument in use', category='main'),
-        ] + AUDIT_FIELDS
-    ),
-
-    'gearing': TableConfig(
-        table_name='gearing',
-        display_name='Gearing Ratios',
-        description='Gearing ratios',
-        primary_key_field='id_gearing',
-        required_fields=['sector_re'],
-        duplicate_check_fields=['gearing', 'sector_re', 'country_cpi', 'region_cpi', 'source'],
-        fields=[
-            FieldConfig('sector_re', 'Sector', 'select', category='main', required=True,
-                       help_text='Sector'),
-            FieldConfig('country_cpi', 'Country', 'text', category='main',
-                       help_text='Country'),
-            FieldConfig('region_cpi', 'Region', 'select', category='main'),
-            FieldConfig('gearing', 'Gearing Ratio', 'number', category='main'),
-            FieldConfig('source', 'Source', 'test', category='main'),
-            FieldConfig('last_verified', 'Last verified', 'number')  
-        ] + AUDIT_FIELDS
-    ),
-
-    'multiplier': TableConfig(
-        table_name='multiplier',
-        display_name='Multipliers',
-        description='Multipliers',
-        primary_key_field='id_multiplier',
-        required_fields=['sub_sector_source'],
-        duplicate_check_fields=['multiplier_local', 'sub_sector_source'],
-        fields=[
-            FieldConfig('sub_sector_source', 'Sub-sector name (from source)', 'text', required=True),
-            FieldConfig('multiplier_local', 'Local Multiplier', 'number', category='main'),
-            FieldConfig('sub_sector_bnef', 'Sub-sector name (BNEF)', 'select', category='main'),
-            FieldConfig('country_cpi', 'Country', 'text', category='main'),
-            FieldConfig('region_cpi', 'Region', 'select', category='main'),
-            FieldConfig('currency', 'Currency', 'select', category='main'),
-            FieldConfig('conversion_rate', 'Conversion', 'select', category='main'),
-            FieldConfig('multiplier_usd', 'Multiplier in USD', 'number', category='main'),
-            FieldConfig('data_source_type', 'Data Source', 'select', category='main'),
-            FieldConfig('notes', 'Notes', 'text', category='main'),
-            FieldConfig('last_verified', 'Last verified', 'number'),
-            FieldConfig('year_of_analysis', 'Year of analysis', 'number')  
-        ] + AUDIT_FIELDS
-    ),
-
-    
-    'exchange_rates': TableConfig(
-        table_name='exchange_rates',
-        display_name='Exchange Rates',
-        description='Currency exchange rates by country and year',
-        primary_key_field='id_fx',
-        required_fields=['country_cpi'],
-        duplicate_check_fields=['country_cpi', 'currency_code', 'year'],
-        fields=[
-            FieldConfig('country_cpi', 'Country', 'select',
-                       options=[],  # Will be populated from geography table
-                       required=True,
-                       help_text='Country for this exchange rate'),
-            FieldConfig('currency_code', 'Currency Code', 'text', category='main',
-                       help_text='3-letter currency code (USD, EUR, etc.)',
-                       placeholder='USD, EUR, GBP...'),
-            FieldConfig('fx_rate', 'Exchange Rate', 'number', category='main',
-                       validation_fn=validate_decimal,
-                       help_text='Exchange rate to USD'),
-            FieldConfig('year', 'Year', 'number')  
-        ] + AUDIT_FIELDS
-    ), 
-    
-    'institution_standardization': TableConfig(
-        table_name='institution_standardization',
-        display_name='Institution Standardization',
-        description='Standardization table for institutions. Typically no need to edit.',
-        primary_key_field='id_institution',
-        required_fields=['institution_original'],
-        duplicate_check_fields=['institution_cpi', 'institution_original'],
-        fields=[
-            FieldConfig('institution_original', 'Institution Name', 'text', required=True,
-                       help_text='Full name of the institution',
-                       placeholder='Enter institution name...'),
-            FieldConfig('institution_cpi', 'Institution Standardized Name', 'select', category='main',
-                       help_text='Only enter if you know the mapping for standardization already or adding a new institution.'),
-        ] + AUDIT_FIELDS
-    ),
-
-    'hierarchy': TableConfig(
-        table_name='hierarchy',
-        display_name='Institution Hierarchy',
-        description='Define parent-child relationships between institutions (e.g., ownership, subsidiaries, governments)',
-        primary_key_field='id_hierarchy',
-        required_fields=['parent_institution', 'child_institution'],
-        duplicate_check_fields=['id_parent', 'id_child'],
-        fields=[
-            FieldConfig('parent_institution', 'Parent Institution', 'text', required=True,
-                       help_text='Name of the parent institution (must exist in institution table)',
-                       placeholder='Search for parent institution...'),
-            FieldConfig('child_institution', 'Child Institution', 'text', required=True,
-                       help_text='Name of the child institution (must exist in institution table)',
-                       placeholder='Search for child institution...'),
-            FieldConfig('percent_ownership', 'Ownership Percentage', 'number', 
-                       help_text='Ownership percentage as decimal (0.0 to 1.0, e.g., 0.51 for 51%)'),
-            FieldConfig('is_controlling_institution', 'Is Controlling', 'boolean',
-                       help_text='True if parent has controlling interest (>50% ownership)'),
-            FieldConfig('relationship_type', 'Relationship Type', 'text',
-                       help_text='Type of relationship (e.g., "subsidiary", "division", "branch")',
-                       placeholder='Enter relationship type...'),
-        ] + AUDIT_FIELDS
-    ),
     
     # 'geography_standardization': TableConfig(
     #     table_name='geography_standardization',
@@ -378,29 +385,23 @@ TABLE_ID_COLUMNS = {
 }
 
 def get_table_id_column(table_name: str) -> Optional[str]:
-    """Get the ID column name for a specific table"""
     return TABLE_ID_COLUMNS.get(table_name)
 
 def get_column_type_config(table_name: str) -> Optional[ColumnTypeConfig]:
-    """Get column type configuration for a specific table"""
     return COLUMN_TYPE_CONFIGS.get(table_name)
 
 def get_all_column_configs() -> Dict[str, ColumnTypeConfig]:
-    """Get all column type configurations"""
     return COLUMN_TYPE_CONFIGS
     
 
 def get_table_config(table_name: str) -> Optional[TableConfig]:
-    """Get configuration for a specific table"""
     return TABLE_CONFIGS.get(table_name)
 
 
 def get_available_tables() -> List[str]:
-    """Get list of available table names"""
     return list(TABLE_CONFIGS.keys())
 
 
 def get_table_display_names() -> Dict[str, str]:
-    """Get mapping of table names to display names"""
     return {name: config.display_name for name, config in TABLE_CONFIGS.items()}
 

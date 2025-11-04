@@ -29,6 +29,7 @@ class InstitutionService:
         double_counting_risk: Optional[str] = None,
         contact_info: Optional[str] = None,
         comments: Optional[str] = None,
+        institution_cpi_short: Optional[str] = None,
         user: str = "system",
         last_verified: Optional[int] = None,
         created_by: Optional[str] = None,
@@ -49,12 +50,12 @@ class InstitutionService:
         
         
         final_name = TextProcessor.normalize_institution_name(institution_name)
-        institution_short = TextProcessor.generate_short_name(final_name)
+        # institution_short = TextProcessor.generate_short_name(final_name)
         
         institution_data = {
             # 'id_institution_cpi': institution_id,
             'institution_cpi': final_name,
-            'institution_cpi_short': institution_short,
+            'institution_cpi_short': institution_cpi_short,
             'last_verified': CURRENT_YEAR,
             'institution_type_layer1': institution_type_layer1,
             'institution_type_layer2': institution_type_layer2,
@@ -129,6 +130,7 @@ class InstitutionService:
             else:
                 creation_result = self.create_institution(
                     institution_name=row.get('institution_cpi') or row.get('institution_name', ''),
+                    institution_cpi_short=row.get('institution_cpi_short'),
                     institution_type_layer1=row.get('institution_type_layer1'),
                     institution_type_layer2=row.get('institution_type_layer2'),
                     institution_type_layer3=row.get('institution_type_layer3'),

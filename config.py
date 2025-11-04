@@ -11,11 +11,12 @@ def get_env_var(key: str, default: str = '') -> str:
     value = os.getenv(key)
     if value:
         return value
+    return default
     
-    try:
-        return st.secrets[key]
-    except (KeyError, AttributeError):
-        return default
+    # try:
+    #     return st.secrets[key]
+    # except (KeyError, AttributeError):
+    #     return default
 
 AWS_REGION = get_env_var('AWS_REGION', 'us-east-1')
 S3_BUCKET = get_env_var('S3_BUCKET', 'cpi-uk-us-datascience-stage')
@@ -37,7 +38,7 @@ YEAR_FIELD_PATTERNS = ['last_verified', 'year', 'year_added']
 
 
 def should_auto_populate_year(field_name: str) -> bool:
-    """Check if a field should be auto-populated with current year"""
+    """Checks against list of year fields to see if it should be autofilled with current year"""
     field_lower = field_name.lower()
     return any(pattern in field_lower for pattern in YEAR_FIELD_PATTERNS)
 
