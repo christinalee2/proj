@@ -142,16 +142,24 @@ if not user_logged_in:
         if st.button("Login with OIDC", type="primary"):
             st.session_state.auth_attempted = True
             st.login("oidc")
+            st.stop()  # Add this to prevent further execution
         st.stop()
     else:
-        st.error("Authentication failed. Please try again.")
-        if st.button("Retry Login", type="primary"):
-            st.session_state.auth_attempted = False
-            st.rerun()
+        # Auth was attempted but we're still not logged in
+        st.error("Authentication failed or still in progress")
+        col1, col2 = st.columns(2)
+        with col1:
+            if st.button("Try Again", type="primary"):
+                st.session_state.auth_attempted = False
+                st.rerun()
+        with col2:
+            if st.button("Login Again", type="secondary"):
+                st.login("oidc")
+                st.stop()
         st.stop()
 
-# Reset auth state for successful login
-st.session_state.auth_attempted = True
+# If we get here, user is authenticated
+user = st.user  # Now it's safe to assign this
 
         
 def initialize_session_state():
