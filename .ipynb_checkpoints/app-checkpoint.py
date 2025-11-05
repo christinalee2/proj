@@ -184,16 +184,16 @@ def render_sidebar():
         user_email = user.get('email', 'No email available')
         st.success(f"Logged in as: **{user_email}**")
         
-        if st.button("Logout", type="secondary", use_container_width=True):
-            for key in list(st.session_state.keys()):
-                del st.session_state[key]
+        # if st.button("Logout", type="secondary", use_container_width=True):
+        #     for key in list(st.session_state.keys()):
+        #         del st.session_state[key]
             
-            # Reset auth state
-            st.session_state.auth_attempted = False
+        #     # Reset auth state
+        #     st.session_state.auth_attempted = False
             
-            # Logout and redirect
-            st.logout()
-            st.rerun()
+        #     # Logout and redirect
+        #     st.logout()
+        #     st.rerun()
         
         # Update session state with authenticated username
         authenticated_username = (
