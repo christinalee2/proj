@@ -118,7 +118,7 @@ query_params = st.query_params if hasattr(st, 'query_params') else {}
 is_callback = 'code' in query_params or 'state' in query_params
 
 # Initialize authentication session state
-if 'auth_attempted' not in st.session_state or st.session_state.auth_attempted is None:
+if 'auth_attempted' not in st.session_state:
     st.session_state.auth_attempted = False
 
 # Check authentication status
