@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 from datetime import datetime
 from dotenv import load_dotenv
+import os
 
 from table_configs import get_available_tables, get_table_display_names, get_table_config
 
@@ -11,12 +12,70 @@ from services.nzft_matching import render_nzft_page, reset_nzft_session
 
 load_dotenv()
 
+def load_auth_config():
+    load_dotenv()               # Load variables from .env
+    from streamlit.runtime.secrets import secrets_singleton
+
+    auth_secrets = {
+        "auth": {
+            "redirect_uri": os.getenv("REDIRECT_URI"),
+            "cookie_secret": os.getenv("COOKIE_SECRET"),
+            "oidc": {
+                "client_id":     os.getenv("CLIENT_ID"),
+                "client_secret": os.getenv("CLIENT_SECRET"),
+                "server_metadata_url": os.getenv("server_metadata_url"),
+                "client_kwargs": { "prompt": "login" }
+            }
+        }
+    }
+
+    # Inject settings into Streamlit’s secret store
+    secrets_singleton._secrets = auth_secrets
+    for k, v in auth_secrets.items():
+        secrets_singleton._maybe_set_environment_variable(k, v)
+
+load_auth_config()
+
+if not st.user.is_logged_in:
+    st.login("oidc")
+    st.stop()
+
+user = st.user
+st.sidebar.markdown(f"**👋 Hello {user.email}!**")
+st.button("Logout", on_click=st.logout)
+
+
+# # Handle authentication
+# if not st.user:
+#     st.login("oidc")
+#     st.stop()
+
+# # Check if user actually has authentication data
+# user = st.user
+# user_dict = dict(user) if user else {}
+
+# # If no email/authentication data, force login
+# if not user_dict or not user_dict.get('email'):
+#     st.error("Authentication required to access this application")
+#     st.info("Please complete the login process")
+#     if st.button("Login with AWS Cognito"):
+#         st.login("oidc")
+#     st.stop()
+    
+# current_username = (
+#     user.get('email', '').split('@')[0] if user.get('email') 
+#     else user.get('preferred_username', 
+#     user.get('name', 'authenticated_user'))
+# )
+
 st.set_page_config(
     page_title="Reference Data Management",
     page_icon="📊",
     layout="wide",
     initial_sidebar_state="expanded"
 )
+
+    
 
 st.markdown("""
     <style>
@@ -36,6 +95,7 @@ st.markdown("""
     """, unsafe_allow_html=True)
 
 
+        
 def initialize_session_state():
     """Initializes default page variables"""
     if 'current_page' not in st.session_state:
@@ -52,13 +112,32 @@ def render_sidebar():
         st.title("Reference Data Manager")
         st.markdown("---")
         
-        st.subheader("User")
-        username = st.text_input(
-            "Username",
-            value=st.session_state.get('username', 'analyst'),   #name entered here should be used for new entries in created_by
-            key="username_input"
+        # Authentication status and user info  
+        st.subheader("Authentication")
+        user = st.user
+        user_email = user.get('email', 'No email available')
+        st.success(f"Logged in as: **{user_email}**")
+        
+        if st.button("Logout", type="secondary", use_container_width=True):
+            st.logout()
+        
+        # Update session state with authenticated username
+        authenticated_username = (
+            user.get('email', '').split('@')[0] if user.get('email') 
+            else user.get('preferred_username', 
+            user.get('name', 'authenticated_user'))
         )
-        st.session_state['username'] = username
+        st.session_state['username'] = authenticated_username
+        
+        st.markdown("---")
+        
+        st.subheader("Current User")
+        st.text_input(
+            "Active User",
+            value=authenticated_username,
+            disabled=True,
+            help="Authenticated user from Cognito"
+        )
         
         st.markdown("---")
         

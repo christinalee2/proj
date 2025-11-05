@@ -213,16 +213,16 @@ TABLE_CONFIGS = {
     'institution_standardization': TableConfig(
         table_name='institution_standardization',
         display_name='Institution Standardization',
-        description='Standardization table for institutions. Typically no need to edit directly. If you are adding a value, the standardized name needs to be the name exactly as it is in the institution table.',
+        description='Standardization table for institutions. Typically no need to edit directly. If you are adding a value, type in the original unstandardized name into the Original Name field. Type the standardized value into the Institution Standardized Name section and choose from the correct option listed (needs to be an existing institution).',
         general_description='Institution standardization links institution names found in raw data sources to standardised CPI institution names. See [documentation](https://www.notion.so/cpi-all/institution_list_all-28fefb28632b8051b09ee27a17d8b6c7) for details.', 
         primary_key_field='id_institution',
-        required_fields=['institution_original'],
-        duplicate_check_fields=['institution_cpi', 'institution_original'],
+        required_fields=['institution_original', 'institution_cpi'],
+        duplicate_check_fields=['institution_original'],
         fields=[
-            FieldConfig('institution_original', 'Institution Name', 'text', required=True,
+            FieldConfig('institution_original', 'Institution Original Name', 'text', category='main', required=True,
                        help_text='Full name of the institution',
                        placeholder='Enter institution name...'),
-            FieldConfig('institution_cpi', 'Institution Standardized Name', 'select', category='main',
+            FieldConfig('institution_cpi', 'Institution Standardized Name', 'institution_search', category='main', required=True,
                        help_text='Only enter if you know the mapping for standardization already or adding a new institution.'),
         ] + AUDIT_FIELDS
     ),

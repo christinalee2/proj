@@ -309,6 +309,57 @@ def create_table_entry(table_name: str, data: Dict[str, Any], user: str = "syste
             created_by=data.get('created_by'),
             created_at=data.get('created_at'),
         )
+    elif table_name == 'institution_standardization':
+        # Special handling for institution_standardization to get the institution ID
+        try:
+            config = get_table_config(table_name)
+            if not config:
+                return {'success': False, 'message': f'No configuration for table {table_name}'}
+            
+            clean_data = {}
+            
+            institution_cpi_name = data.get('institution_cpi')
+            institution_id = st.session_state.get(f"{table_name}_primary_id")
+            
+            if not institution_id:
+                for key in st.session_state.keys():
+                    if 'institution_cpi' in key and key.endswith('_id'):
+                        institution_id = st.session_state[key]
+                        break
+            
+            if institution_id and institution_cpi_name:
+                clean_data['id_institution_cpi'] = int(institution_id)
+                clean_data['institution_cpi'] = institution_cpi_name
+            else:
+                return {'success': False, 'message': 'Institution ID not found. Please select an institution from the search.'}
+            
+            for field_config in config.fields:
+                field_name = field_config.name
+                if field_name == 'institution_cpi':
+                    continue  # Already handled above
+                if field_name in data and data[field_name] is not None and str(data[field_name]).strip() != '':
+                    clean_data[field_name] = data[field_name]
+            
+            clean_data['created_at'] = CURRENT_YEAR
+            clean_data['created_by'] = user
+            
+            clean_data = {k: v for k, v in clean_data.items() if v is not None}
+            
+            query_service = QueryService()
+            success = query_service.execute_insert(table_name, clean_data)
+            
+            if success:
+                return {
+                    'success': True,
+                    'entry_id': clean_data.get('id_institution_cpi'),
+                    'message': 'Institution standardization entry created successfully'
+                }
+            else:
+                return {'success': False, 'message': 'Failed to insert into database'}
+                
+        except Exception as e:
+            return {'success': False, 'message': f'Error creating entry: {str(e)}'}
+        
     else:
         # For other tables, use direct database insertion, could probably make institution here too, I just set it up on institution service initially
         try:
@@ -378,7 +429,7 @@ def create_table_entry(table_name: str, data: Dict[str, Any], user: str = "syste
 
 
 
-def render_form_field(field_config, dropdown_options: Dict[str, List[str]], key_suffix: str) -> Any:
+def render_form_field(field_config, dropdown_options: Dict[str, List[str]], key_suffix: str, existing_institutions: pd.DataFrame = None) -> Any:
     """Render a single form field with improved prefill handling"""
     field_key = f"{field_config.name}_{key_suffix}"
     
@@ -398,8 +449,32 @@ def render_form_field(field_config, dropdown_options: Dict[str, List[str]], key_
     
     if should_auto_populate_year(field_config.name) and not default_value:
         default_value = CURRENT_YEAR
-    
-    if field_config.field_type == 'text':
+
+    if field_config.field_type == 'institution_search': # different widget for looking up institutions so that it gets existing value and id
+        if existing_institutions is None or existing_institutions.empty:
+            if 'institution_standardization_institutions' in st.session_state:
+                existing_institutions = st.session_state['institution_standardization_institutions']
+            else:
+                st.error("Institution data not available for search")
+                return None
+        
+        selected_name, selected_id = render_institution_search_widget(
+            key=field_key,
+            label=field_config.display_name,
+            existing_institutions=existing_institutions,
+            help_text=field_config.help_text,
+            placeholder="Start typing to search institutions..."
+        )
+        
+        if selected_name and selected_id:
+            st.session_state[f"{field_key}_name"] = selected_name
+            st.session_state[f"{field_key}_id"] = selected_id
+            return selected_name 
+        else:
+            return None
+
+
+    elif field_config.field_type == 'text':
         return st.text_input(
             field_config.display_name,
             value=default_value,
@@ -486,12 +561,22 @@ def get_table_reference_data(table_name: str, config):
                 except Exception as e:
                     print(f"Could not load standardization data: {e}")
                     standardization_data = pd.DataFrame()
-
+            
                 try:
                     existing_hierarchy_data = get_table_data_cached('hierarchy', limit=None)
                 except Exception as e:
                     print(f"Could not load hierarchy data: {e}")
                     existing_hierarchy_data = pd.DataFrame()
+            
+            elif table_name == 'institution_standardization':
+                # For institution_standardization, we need the institution table data for search
+                try:
+                    # Load existing institutions for the search widget
+                    institution_data = get_table_data_cached('institution', limit=None)
+                    st.session_state['institution_standardization_institutions'] = institution_data
+                except Exception as e:
+                    print(f"Could not load institution data: {e}")
+                    st.session_state['institution_standardization_institutions'] = pd.DataFrame()
                     
             existing_data = get_table_data_cached(table_name, limit=None)
             
@@ -538,12 +623,31 @@ def render_unified_single_entry_form(table_name: str):
     standardization_service = StandardizationService()
     
     if primary_field_config:
-        primary_value = st.text_input(
-            primary_field_config.display_name,
-            placeholder=primary_field_config.placeholder or f"Enter {primary_field_config.display_name.lower()}...",
-            help=primary_field_config.help_text,
-            key=f"{table_name}_primary"
-        )
+        if primary_field_config.field_type == 'institution_search':
+            if table_name == 'institution_standardization':
+                search_data = st.session_state.get('institution_standardization_institutions', pd.DataFrame())
+            else:
+                search_data = existing_data
+                
+            primary_value, institution_id = render_institution_search_widget(
+                key=f"{table_name}_primary",
+                label=primary_field_config.display_name,
+                existing_institutions=search_data,
+                help_text=primary_field_config.help_text,
+                placeholder="Start typing to search institutions..."
+            )
+            
+            # Store the institution ID for later use
+            if institution_id:
+                st.session_state[f"{table_name}_primary_id"] = institution_id
+        else:
+            # For regular text fields
+            primary_value = st.text_input(
+                primary_field_config.display_name,
+                placeholder=primary_field_config.placeholder or f"Enter {primary_field_config.display_name.lower()}...",
+                help=primary_field_config.help_text,
+                key=f"{table_name}_primary"
+            )
 
         if 'last_primary_value' not in st.session_state:
             st.session_state['last_primary_value'] = ''
@@ -908,21 +1012,21 @@ def render_unified_single_entry_form(table_name: str):
         cols = st.columns(2)
         for i, field_config in enumerate(required_fields):
             with cols[i % 2]:
-                form_data[field_config.name] = render_form_field(field_config, dropdown_options, f"{table_name}_req_{i}")
+                form_data[field_config.name] = render_form_field(field_config, dropdown_options, f"{table_name}_req_{i}", existing_data)
     
     if optional_main_fields:
         st.subheader("Secondary Fields")
         cols = st.columns(2)
         for i, field_config in enumerate(optional_main_fields):
             with cols[i % 2]:
-                form_data[field_config.name] = render_form_field(field_config, dropdown_options, f"{table_name}_opt_{i}")
+                form_data[field_config.name] = render_form_field(field_config, dropdown_options, f"{table_name}_opt_{i}", existing_data)
     
     if advanced_fields:
         with st.expander("Additional Information"):
             cols = st.columns(2)
             for i, field_config in enumerate(advanced_fields):
                 with cols[i % 2]:
-                    form_data[field_config.name] = render_form_field(field_config, dropdown_options, f"{table_name}_adv_{i}")
+                    form_data[field_config.name] = render_form_field(field_config, dropdown_options, f"{table_name}_adv_{i}", existing_data)
 
 
 
