@@ -15,7 +15,6 @@ load_dotenv()
 
 
 def load_auth_config():
-    load_dotenv()               # Load variables from .env
     from streamlit.runtime.secrets import secrets_singleton
 
     auth_secrets = {
@@ -31,7 +30,6 @@ def load_auth_config():
         }
     }
 
-    # Inject settings into Streamlit’s secret store
     secrets_singleton._secrets = auth_secrets
     for k, v in auth_secrets.items():
         secrets_singleton._maybe_set_environment_variable(k, v)
@@ -39,29 +37,6 @@ def load_auth_config():
 load_auth_config()
 
 
-
-# # Handle authentication
-# if not st.user:
-#     st.login("oidc")
-#     st.stop()
-
-# # Check if user actually has authentication data
-# user = st.user
-# user_dict = dict(user) if user else {}
-
-# # If no email/authentication data, force login
-# if not user_dict or not user_dict.get('email'):
-#     st.error("Authentication required to access this application")
-#     st.info("Please complete the login process")
-#     if st.button("Login with AWS Cognito"):
-#         st.login("oidc")
-#     st.stop()
-    
-# current_username = (
-#     user.get('email', '').split('@')[0] if user.get('email') 
-#     else user.get('preferred_username', 
-#     user.get('name', 'authenticated_user'))
-# )
 
 st.set_page_config(
     page_title="Reference Data Management",
@@ -91,28 +66,6 @@ st.markdown("""
 
 
 
-# if not st.user.is_logged_in:
-#     st.login("oidc")
-#     st.stop()
-
-# user = st.user
-# st.sidebar.markdown(f"**👋 Hello {user.email}!**")
-# st.button("Logout", on_click=st.logout)
-
-# try:
-#     if not hasattr(st, 'user') or not st.user or not st.user.is_logged_in:
-#         st.info("Please log in to access this application")
-#         st.login("oidc")
-#         st.stop()
-# except Exception as e:
-#     st.error("Authentication required")
-#     st.login("oidc") 
-#     st.stop()
-
-# # Only access user info if authenticated
-# user = st.user
-
-# Check if we're in callback processing
 query_params = st.query_params if hasattr(st, 'query_params') else {}
 is_callback = 'code' in query_params or 'state' in query_params
 
@@ -120,7 +73,6 @@ is_callback = 'code' in query_params or 'state' in query_params
 if 'auth_attempted' not in st.session_state:
     st.session_state.auth_attempted = False
 
-# Check authentication status
 user_logged_in = False
 user = None
 
@@ -132,7 +84,6 @@ try:
 except:
     user_logged_in = False
 
-# Handle authentication
 if not user_logged_in:
     if is_callback:
         st.info("Processing authentication...")
@@ -158,8 +109,7 @@ if not user_logged_in:
                 st.stop()
         st.stop()
 
-# If we get here, user is authenticated
-user = st.user  # Now it's safe to assign this
+user = st.user 
 
         
 def initialize_session_state():
