@@ -134,12 +134,6 @@ except:
     user_logged_in = False
 
 # Handle authentication
-if not user_logged_in:
-    if 'force_clean_auth' not in st.session_state:
-        st.session_state.force_clean_auth = True
-        for key in list(st.session_state.keys()):
-            if 'auth' in key.lower():
-                del st.session_state[key]
     if is_callback:
         st.info("Processing authentication...")
         st.stop()
