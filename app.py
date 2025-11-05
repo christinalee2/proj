@@ -134,6 +134,7 @@ except:
     user_logged_in = False
 
 # Handle authentication
+if not user_logged_in:
     if is_callback:
         st.info("Processing authentication...")
         st.stop()
