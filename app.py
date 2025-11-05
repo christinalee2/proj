@@ -38,8 +38,6 @@ def load_auth_config():
 
 load_auth_config()
 
-st.write("Cookie secret loaded:", st.secrets["auth"]["cookie_secret"])
-
 
 
 # # Handle authentication
