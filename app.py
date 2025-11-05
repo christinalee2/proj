@@ -26,8 +26,7 @@ def load_auth_config():
                 "client_id":     os.getenv("client_id"),
                 "client_secret": os.getenv("client_secret"),
                 "server_metadata_url": os.getenv("server_metadata_url"),
-                "client_kwargs": { "prompt": "login",
-                                 "scope": "openid"}
+                "client_kwargs": {"scope": "openid email profile"}
             }
         }
     }
@@ -186,16 +185,15 @@ def render_sidebar():
         st.success(f"Logged in as: **{user_email}**")
         
         if st.button("Logout", type="secondary", use_container_width=True):
+            for key in list(st.session_state.keys()):
+                del st.session_state[key]
+            
+            # Reset auth state
+            st.session_state.auth_attempted = False
+            
+            # Logout and redirect
             st.logout()
-            # for key in list(st.session_state.keys()):
-            #     del st.session_state[key]
-            
-            # # Reset auth state
-            # st.session_state.auth_attempted = False
-            
-            # # Logout
-            # st.logout()
-            # st.rerun()
+            st.rerun()
         
         # Update session state with authenticated username
         authenticated_username = (
