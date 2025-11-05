@@ -89,13 +89,29 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-if not st.user.is_logged_in:
-    st.login("oidc")
+
+
+# if not st.user.is_logged_in:
+#     st.login("oidc")
+#     st.stop()
+
+# user = st.user
+# st.sidebar.markdown(f"**👋 Hello {user.email}!**")
+# st.button("Logout", on_click=st.logout)
+
+try:
+    if not hasattr(st, 'user') or not st.user or not st.user.is_logged_in:
+        st.info("Please log in to access this application")
+        st.login("oidc")
+        st.stop()
+except Exception as e:
+    st.error("Authentication required")
+    st.login("oidc") 
     st.stop()
 
+# Only access user info if authenticated
 user = st.user
-st.sidebar.markdown(f"**👋 Hello {user.email}!**")
-st.button("Logout", on_click=st.logout)
+
         
 def initialize_session_state():
     """Initializes default page variables"""
