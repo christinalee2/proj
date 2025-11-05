@@ -135,6 +135,11 @@ except:
 
 # Handle authentication
 if not user_logged_in:
+    if 'force_clean_auth' not in st.session_state:
+        st.session_state.force_clean_auth = True
+        for key in list(st.session_state.keys()):
+            if 'auth' in key.lower():
+                del st.session_state[key]
     if is_callback:
         st.info("Processing authentication...")
         st.stop()
@@ -186,8 +191,15 @@ def render_sidebar():
         st.success(f"Logged in as: **{user_email}**")
         
         if st.button("Logout", type="secondary", use_container_width=True):
-            st.session_state.auth_attempted = False  # Reset auth state
+            for key in list(st.session_state.keys()):
+                del st.session_state[key]
+            
+            # Reset auth state
+            st.session_state.auth_attempted = False
+            
+            # Logout
             st.logout()
+            st.rerun()
         
         # Update session state with authenticated username
         authenticated_username = (
