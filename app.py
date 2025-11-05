@@ -99,18 +99,59 @@ st.markdown("""
 # st.sidebar.markdown(f"**👋 Hello {user.email}!**")
 # st.button("Logout", on_click=st.logout)
 
-try:
-    if not hasattr(st, 'user') or not st.user or not st.user.is_logged_in:
-        st.info("Please log in to access this application")
-        st.login("oidc")
-        st.stop()
-except Exception as e:
-    st.error("Authentication required")
-    st.login("oidc") 
-    st.stop()
+# try:
+#     if not hasattr(st, 'user') or not st.user or not st.user.is_logged_in:
+#         st.info("Please log in to access this application")
+#         st.login("oidc")
+#         st.stop()
+# except Exception as e:
+#     st.error("Authentication required")
+#     st.login("oidc") 
+#     st.stop()
 
-# Only access user info if authenticated
-user = st.user
+# # Only access user info if authenticated
+# user = st.user
+
+# Check if we're in callback processing
+query_params = st.query_params if hasattr(st, 'query_params') else {}
+is_callback = 'code' in query_params or 'state' in query_params
+
+# Initialize authentication session state
+if 'auth_attempted' not in st.session_state:
+    st.session_state.auth_attempted = False
+
+# Check authentication status
+user_logged_in = False
+user = None
+
+try:
+    if hasattr(st, 'user') and st.user and hasattr(st.user, 'is_logged_in'):
+        user_logged_in = st.user.is_logged_in
+        if user_logged_in:
+            user = st.user
+except:
+    user_logged_in = False
+
+# Handle authentication
+if not user_logged_in:
+    if is_callback:
+        st.info("Processing authentication...")
+        st.stop()
+    elif not st.session_state.auth_attempted:
+        st.info("Please log in to access this application")
+        if st.button("Login with OIDC", type="primary"):
+            st.session_state.auth_attempted = True
+            st.login("oidc")
+        st.stop()
+    else:
+        st.error("Authentication failed. Please try again.")
+        if st.button("Retry Login", type="primary"):
+            st.session_state.auth_attempted = False
+            st.rerun()
+        st.stop()
+
+# Reset auth state for successful login
+st.session_state.auth_attempted = True
 
         
 def initialize_session_state():
@@ -136,6 +177,7 @@ def render_sidebar():
         st.success(f"Logged in as: **{user_email}**")
         
         if st.button("Logout", type="secondary", use_container_width=True):
+            st.session_state.auth_attempted = False  # Reset auth state
             st.logout()
         
         # Update session state with authenticated username
