@@ -185,15 +185,16 @@ def render_sidebar():
         st.success(f"Logged in as: **{user_email}**")
         
         if st.button("Logout", type="secondary", use_container_width=True):
-            for key in list(st.session_state.keys()):
-                del st.session_state[key]
-            
-            # Reset auth state
-            st.session_state.auth_attempted = False
-            
-            # Logout
             st.logout()
-            st.rerun()
+            # for key in list(st.session_state.keys()):
+            #     del st.session_state[key]
+            
+            # # Reset auth state
+            # st.session_state.auth_attempted = False
+            
+            # # Logout
+            # st.logout()
+            # st.rerun()
         
         # Update session state with authenticated username
         authenticated_username = (
