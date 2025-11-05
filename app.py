@@ -26,7 +26,7 @@ def load_auth_config():
                 "client_id":     os.getenv("client_id"),
                 "client_secret": os.getenv("client_secret"),
                 "server_metadata_url": os.getenv("server_metadata_url"),
-                "client_kwargs": {"prompt": "login", "scope": "openid"}
+                "client_kwargs": {"scope": "openid"}
             }
         }
     }
