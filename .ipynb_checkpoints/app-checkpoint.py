@@ -27,7 +27,7 @@ def load_auth_config():
                 "client_secret": os.getenv("client_secret"),
                 "server_metadata_url": os.getenv("server_metadata_url"),
                 "client_kwargs": { "prompt": "login",
-                                 "scope": "openid email profile"}
+                                 "scope": "openid"}
             }
         }
     }
