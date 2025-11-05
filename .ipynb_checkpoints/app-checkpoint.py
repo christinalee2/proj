@@ -12,17 +12,19 @@ from services.nzft_matching import render_nzft_page, reset_nzft_session
 
 load_dotenv()
 
+
+
 def load_auth_config():
     load_dotenv()               # Load variables from .env
     from streamlit.runtime.secrets import secrets_singleton
 
     auth_secrets = {
         "auth": {
-            "redirect_uri": os.getenv("REDIRECT_URI"),
-            "cookie_secret": os.getenv("COOKIE_SECRET"),
+            "redirect_uri": os.getenv("redirect_uri"),
+            "cookie_secret": os.getenv("cookie_secret"),
             "oidc": {
-                "client_id":     os.getenv("CLIENT_ID"),
-                "client_secret": os.getenv("CLIENT_SECRET"),
+                "client_id":     os.getenv("client_id"),
+                "client_secret": os.getenv("client_secret"),
                 "server_metadata_url": os.getenv("server_metadata_url"),
                 "client_kwargs": { "prompt": "login" }
             }
@@ -36,13 +38,8 @@ def load_auth_config():
 
 load_auth_config()
 
-if not st.user.is_logged_in:
-    st.login("oidc")
-    st.stop()
+st.write("Cookie secret loaded:", st.secrets["auth"]["cookie_secret"])
 
-user = st.user
-st.sidebar.markdown(f"**👋 Hello {user.email}!**")
-st.button("Logout", on_click=st.logout)
 
 
 # # Handle authentication
@@ -94,7 +91,13 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
+if not st.user.is_logged_in:
+    st.login("oidc")
+    st.stop()
 
+user = st.user
+st.sidebar.markdown(f"**👋 Hello {user.email}!**")
+st.button("Logout", on_click=st.logout)
         
 def initialize_session_state():
     """Initializes default page variables"""
