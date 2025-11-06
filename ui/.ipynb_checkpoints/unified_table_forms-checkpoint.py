@@ -624,8 +624,18 @@ def render_unified_single_entry_form(table_name: str):
     
     if primary_field_config:
         if hasattr(primary_field_config, 'detailed_help') and primary_field_config.detailed_help:
-            with st.expander(f"+", expanded=False):
-                st.markdown(primary_field_config.detailed_help)
+            col1, col2 = st.columns([0.9, 0.1])
+            with col1:
+                st.write("")  # Empty space
+            with col2:
+                help_key = f"help_{primary_field}_primary"
+                if st.button("➕", key=help_key, help="Click for detailed instructions", use_container_width=True):
+                    st.session_state[f"{help_key}_show"] = not st.session_state.get(f"{help_key}_show", False)
+            
+            # Show help content if toggled
+            if st.session_state.get(f"{help_key}_show", False):
+                st.info(primary_field_config.detailed_help)
+                
                 
         if primary_field_config.field_type == 'institution_search':
             if table_name == 'institution_standardization':
