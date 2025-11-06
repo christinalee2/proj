@@ -1009,27 +1009,10 @@ def render_unified_single_entry_form(table_name: str):
     advanced_fields = [f for f in remaining_fields if getattr(f, 'category', 'main') == 'advanced']
     
     if required_fields:
-        # cols = st.columns(2)
-        # for i, field_config in enumerate(required_fields):
-        #     with cols[i % 2]:
-        #         form_data[field_config.name] = render_form_field(field_config, dropdown_options, f"{table_name}_req_{i}", existing_data)
-        # Create columns for field and help button
-        field_col, help_col = st.columns([0.9, 0.1])
-        
-        with field_col:
-            form_data[field_config.name] = render_form_field(field_config, dropdown_options, f"{table_name}_req_{i}", existing_data)
-        
-        with help_col:
-            if hasattr(field_config, 'detailed_help') and field_config.detailed_help:
-                help_key = f"help_{field_config.name}_req_{i}"
-                if st.button("➕", key=help_key, help="Click for detailed instructions", use_container_width=True):
-                    st.session_state[f"{help_key}_show"] = not st.session_state.get(f"{help_key}_show", False)
-        
-        # Show help content if toggled
-        if hasattr(field_config, 'detailed_help') and field_config.detailed_help:
-            help_key = f"help_{field_config.name}_req_{i}"
-            if st.session_state.get(f"{help_key}_show", False):
-                st.info(field_config.detailed_help)
+        cols = st.columns(2)
+        for i, field_config in enumerate(required_fields):
+            with cols[i % 2]:
+                form_data[field_config.name] = render_form_field(field_config, dropdown_options, f"{table_name}_req_{i}", existing_data)
     
     if optional_main_fields:
         st.subheader("Secondary Fields")
