@@ -15,6 +15,7 @@ class FieldConfig:
     required: bool = False
     options: Optional[List[str]] = None  
     help_text: Optional[str] = None
+    detailed_help: Optional[str] = None
     placeholder: Optional[str] = None
     validation_fn: Optional[callable] = None
     category: str = 'main', 'advanced'
@@ -93,7 +94,7 @@ TABLE_CONFIGS = {
         duplicate_check_fields=['institution_cpi'],
         fields=[
             FieldConfig('institution_cpi', 'Institution Name', 'text', required=True,
-                       help_text='Full name of the institution',
+                       help_text='Full name of the institution', detailed_help='More detailed help',
                        placeholder='Enter institution name...'),
             FieldConfig('institution_type_layer1', 'Type Layer 1', 'select', category='main',
                        help_text='Public or Private classification', required=True),
@@ -152,8 +153,8 @@ TABLE_CONFIGS = {
         required_fields=['sector_re'],
         duplicate_check_fields=['gearing', 'sector_re', 'country_cpi', 'last_verified'],
         fields=[
-            FieldConfig('sector_re', 'Sector', 'select', category='main', required=True,
-                       help_text='Sector'),
+            FieldConfig('sector_re', 'Solution', 'select', category='main', required=True,
+                       help_text='solution'),
             FieldConfig('country_cpi', 'Country', 'select', category='main',
                        help_text='Country', required=True),
             FieldConfig('region_cpi', 'Region', 'select', category='main', required=True),
@@ -212,8 +213,8 @@ TABLE_CONFIGS = {
     
     'institution_standardization': TableConfig(
         table_name='institution_standardization',
-        display_name='Institution Standardization',
-        description='Standardization table for institutions. Typically no need to edit directly. If you are adding a value, type in the original unstandardized name into the Original Name field. Type the standardized value into the Institution Standardized Name section and choose from the correct option listed (needs to be an existing institution).',
+        display_name='Institution Mapping',
+        description='Standardization mapping table for institutions. Typically no need to edit directly. If you are adding a value, type in the original unstandardized name into the Original Name field. Type the standardized value into the Institution Standardized Name section and choose from the correct option listed (needs to be an existing institution).',
         general_description='Institution standardization links institution names found in raw data sources to standardised CPI institution names. See [documentation](https://www.notion.so/cpi-all/institution_list_all-28fefb28632b8051b09ee27a17d8b6c7) for details.', 
         primary_key_field='id_institution',
         required_fields=['institution_original', 'institution_cpi'],

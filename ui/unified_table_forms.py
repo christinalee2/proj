@@ -623,6 +623,10 @@ def render_unified_single_entry_form(table_name: str):
     standardization_service = StandardizationService()
     
     if primary_field_config:
+        if hasattr(primary_field_config, 'detailed_help') and primary_field_config.detailed_help:
+            with st.expander(f"+", expanded=False):
+                st.markdown(primary_field_config.detailed_help)
+                
         if primary_field_config.field_type == 'institution_search':
             if table_name == 'institution_standardization':
                 search_data = st.session_state.get('institution_standardization_institutions', pd.DataFrame())
