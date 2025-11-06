@@ -31,11 +31,11 @@ OPENAI_API_KEY = get_env_var('OPENAI_API_KEY', '')
 AWS_ACCESS_KEY_ID = get_env_var('AWS_ACCESS_KEY_ID', '')
 AWS_SECRET_ACCESS_KEY = get_env_var('AWS_SECRET_ACCESS_KEY', '')
 
-cookie_secret = get_env_var('cookie_secret', '')
-client_id = get_env_var('client_id', '')
-client_secret = get_env_var('client_secret', '')
-server_metadata_url = get_env_var('server_metadata_url', '')
-redirect_uri = get_env_var('redirect_uri', '')
+cookie_secret = get_env_var('COOKIE_SECRET', '')
+client_id = get_env_var('CLIENT_ID', '')
+client_secret = get_env_var('CLIENT_SECRET', '')
+server_metadata_url = get_env_var('SERVER_METADATA_URL', '')
+redirect_uri = get_env_var('REDIRECT_URI', '')
 
 CURRENT_YEAR = int(datetime.now().year)
 FUZZY_MATCH_THRESHOLD = 85

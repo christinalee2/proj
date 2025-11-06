@@ -19,12 +19,12 @@ def load_auth_config():
 
     auth_secrets = {
         "auth": {
-            "redirect_uri": os.getenv("redirect_uri"),
-            "cookie_secret": os.getenv("cookie_secret"),
+            "redirect_uri": os.getenv("REDIRECT_URI"),
+            "cookie_secret": os.getenv("COOKIE_SECRET"),
             "oidc": {
-                "client_id":     os.getenv("client_id"),
-                "client_secret": os.getenv("client_secret"),
-                "server_metadata_url": os.getenv("server_metadata_url"),
+                "client_id":     os.getenv("CLIENT_ID"),
+                "client_secret": os.getenv("CLIENT_SECRET"),
+                "server_metadata_url": os.getenv("SERVER_METADATA_URL"),
                 "client_kwargs": {"scope": "openid"}
             }
         }
