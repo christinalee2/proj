@@ -1037,25 +1037,30 @@ def render_unified_single_entry_form(table_name: str):
         cols = st.columns(2)
         for i, field_config in enumerate(required_fields):
             with cols[i % 2]:
-                help_key = f"help_{field_config.name}_opt_{i}"
-
-                form_data[field_config.name] = render_form_field(
-                    field_config,
-                    dropdown_options,
-                    f"{table_name}_opt_{i}",
-                    existing_data
-                )
-    
-                if getattr(field_config, "detailed_help", None):
-                    show_help = st.toggle(
-                        "Show detailed help",
-                        key=help_key,
-                        label_visibility="visible",  
-                        help="Click to view instructions",
+                help_key = f"help_{field_config.name}_req_{i}"
+            
+                field_col, toggle_col = st.columns([0.8, 0.2])
+                
+                with field_col:
+                    form_data[field_config.name] = render_form_field(
+                        field_config,
+                        dropdown_options,
+                        f"{table_name}_req_{i}",
+                        existing_data
                     )
+                
+                with toggle_col:
+                    if getattr(field_config, "detailed_help", None):
+                        show_help = st.toggle(
+                            "Help",
+                            key=help_key,
+                            label_visibility="collapsed"
+                        )
+                    else:
+                        show_help = False
     
-                    if show_help:
-                        st.info(field_config.detailed_help)
+                if getattr(field_config, "detailed_help", None) and show_help:
+                    st.info(field_config.detailed_help)
                             
                 # field_col, help_col = st.columns([0.9, 0.1])
                 
