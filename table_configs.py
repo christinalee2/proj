@@ -82,13 +82,17 @@ AUDIT_FIELDS = [
 
 
 #Can add any tables you want to these - this will add a new table to the dropdown list of choices 
+#General_description will show up right under when the user chooses their table (step 1)
+#Description shows up under the "Add New ___"
+#Help_text is for fields that don't require a lot of extra help (just a little ?)
+#Detailed_help is for fields that need a lot of documentation (expandable +), generally have one or the other 
 TABLE_CONFIGS = {
     'institution': TableConfig(
         table_name='institution',
         display_name='Institution',
         has_standardization=True,
-        description='Before adding a new institution, first ensure the institution does not currently exist in the reference tables. If there are common acronyms search for both i.e., for the IMF, search for both IMF and International Monetary Fund.  If there is a non-exact match, click Keep to add to standardization table. Otherwise, all new institutions should be entered as a full name.',
-        general_description='Institution is a two-piece reference table that operates using two datasets: \nInstitution (Classifications): Classifies standardised institution names across:  \na) Institution type layer 1: distinguishes between public and private institutions. \nb) Institution type layer 2: provides further categorisation to layer 1, such as corporations, commercial financial institutions, or private funds for private entities, and multilateral development finance institutions or governments for public entities. \nc) Institution type layer 3 (if applicable): offers additional subcategories, such as private equity funds, venture capital funds, and infrastructure funds.  \nd) Subsidiary location: Country of residence for the institution. \ne) Parent location: Country of residence for the parent institution. \n\nInstitution (Standardized Name): Maps original institution names from raw data sources to standardised CPI institution names. This prevents CPI from having multiple names for the same institution. \nFor more detailed documentation see [institution](https://www.notion.so/cpi-all/institution_list_cpi-28fefb28632b804b8b96fb7ca466937e) and [institution standandardization mapping] (https://www.notion.so/cpi-all/institution_list_all-28fefb28632b8051b09ee27a17d8b6c7).', 
+        description="First, check to see if the original institution name currently exists in the reference table. If there is an 'institution already exists' message, you do not need to update this institution. If there is an",
+        general_description='Institution is a two-piece reference table that operates using two datasets: \n\nInstitution (Classifications): Classifies standardised institution names across:  \n\na) Institution type layer 1: distinguishes between public and private institutions. \n\nb) Institution type layer 2: provides further categorisation to layer 1, such as corporations, commercial financial institutions, or private funds for private entities, and multilateral development finance institutions or governments for public entities. \n\nc) Institution type layer 3 (if applicable): offers additional subcategories, such as private equity funds, venture capital funds, and infrastructure funds.  \n\nd) Subsidiary location: Country of residence for the institution. \n\ne) Parent location: Country of residence for the parent institution. \n\nInstitution (Standardized Name): Maps original institution names from raw data sources to standardised CPI institution names. This prevents CPI from having multiple names for the same institution. \n\nFor more detailed documentation see [institution](https://www.notion.so/cpi-all/institution_list_cpi-28fefb28632b804b8b96fb7ca466937e) and [institution standandardization mapping](https://www.notion.so/cpi-all/institution_list_all-28fefb28632b8051b09ee27a17d8b6c7).', 
         primary_key_field='id_institution_cpi',
         required_fields=['institution_cpi'],
         duplicate_check_fields=['institution_cpi'],
@@ -97,7 +101,20 @@ TABLE_CONFIGS = {
                        help_text='Enter full institution name without acronyms',
                        placeholder='Type original institution name here...'),
             FieldConfig('institution_type_layer1', 'Type Layer 1', 'select', category='main',
-                       help_text='Public or Private classification', required=True),
+                       detailed_help="""
+                        | Category | Definition | Examples |
+                        |----------|------------|----------|
+                        | Public | Organisations that are majority-owned (>50%) or effectively controlled by a government or public authority. This includes central, regional, or local governments, state-owned enterprises (SOEs) and financial institutions (SOFIs), and multilateral, bilateral, and national development finance institutions (DFIs). | Ministries, central banks, sovereign wealth funds, state-owned utilities, public universities, multilateral DFIs (e.g., World Bank, AfDB) |
+                        | Private | Organisations that are majority-owned (>50%) by private individuals, corporations, or other non-government entities. | Commercial banks, private investment firms, family offices, privately held corporations, listed companies without majority state ownership |
+                        | Unknown | Ownership and control information cannot be reliably determined after reasonable research. This should be used sparingly and only when sufficient information is not publicly available. | Entities with limited disclosure or unverified ownership structures |
+
+For subsidiaries of public institutions, classify according to the ownership of the subsidiary itself, not the parent organisation, unless the parent’s control clearly determines operations. To find the relevant information for the above classification, we recommend following the below steps (in order): 
+1.Visit the official company website and check the “About”, “Governance”, or “Investor Relations” sections to see if you can find any ownership and shareholder information. 
+2.Visit reputable financial or business sources to search for information. For example: 
+a) Bloomberg. Google search “[institution name] Bloomberg” and select the company profile link. You will need a subscription to see all the company details, but a summary is still available. 
+b) Reuters. Google search “[institution name] Reuters” and select the Stock Price and Latest News link. Scroll down and you will see the “Company Information” section. 
+c) Crunchbase. Google search “[institution name] Crunchbase” and select the Company Profile & Funding link. The header will have the industry of the institution. Scroll down company details.""", required=True),
+            
             FieldConfig('institution_type_layer2', 'Type Layer 2', 'select', category='main', detailed_help='Institution maps standardized institution names to their institution type (layer 1: public/private; layer 2: e.g., commercial FI, multilateral climate fund) and links each to a parent or subsidiary country. See [documentation](https://www.notion.so/cpi-all/institution_list_cpi-28fefb28632b804b8b96fb7ca466937e) for details. \nInstitution maps standardized institution names to their institution type (layer 1: public/private; layer 2: e.g., commercial FI, multilateral climate fund) and links each to a parent or subsidiary country. See [documentation](https://www.notion.so/cpi-all/institution_list_cpi-28fefb28632b804b8b96fb7ca466937e) for details. \nInstitution maps standardized institution names to their institution type (layer 1: public/private; layer 2: e.g., commercial FI, multilateral climate fund) and links each to a parent or subsidiary country. See [documentation](https://www.notion.so/cpi-all/institution_list_cpi-28fefb28632b804b8b96fb7ca466937e) for details.', required=True),
             FieldConfig('institution_type_layer3', 'Type Layer 3', 'select', category='main', required=True),
             FieldConfig('country_sub', 'Subsidiary Country', 'select', category='main',
