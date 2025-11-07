@@ -30,30 +30,43 @@ class ValidationResult:
 
 
 def add_form_help_css():
-    """custom CSS for just the little detailed_help buttons (otherwise takes up full column width)"""
+    """Add custom CSS for form help expanders only - aggressive version"""
     st.markdown("""
     <style>
-    .form-help-expander .streamlit-expanderHeader {
-        background: transparent !important;
-        border: 1px solid #d4d4d4 !important;
-        border-radius: 4px !important;
-        padding: 0.2rem 0.4rem !important;
-        font-size: 12px !important;
-        width: fit-content !important;
-        margin: 0.2rem 0 !important;
-        color: #666 !important;
+    .form-help-expander {
+        display: flex !important;
+        justify-content: flex-start !important;
     }
-    .form-help-expander .streamlit-expanderHeader:hover {
-        background-color: #f8f9fa !important;
-        color: #333 !important;
+    
+    .form-help-expander > div {
+        width: auto !important;
+        flex: none !important;
     }
-    .form-help-expander .streamlit-expanderHeader p {
-        margin: 0 !important;
-        font-weight: normal !important;
+    
+    .form-help-expander [data-testid="stExpander"] {
+        width: 100px !important;
+        max-width: 100px !important;
+        min-width: 80px !important;
+        flex: none !important;
     }
-    .form-help-expander .streamlit-expanderContent {
-        padding: 0.5rem !important;
-        margin-top: 0.2rem !important;
+    
+    .form-help-expander [data-testid="stExpander"] details {
+        width: 100px !important;
+    }
+    
+    .form-help-expander [data-testid="stExpander"] details summary {
+        background: #4CAF50 !important;  /* Green so you can see it working */
+        color: white !important;
+        padding: 0.3rem 0.6rem !important;
+        border-radius: 8px !important;
+        font-size: 11px !important;
+        text-align: center !important;
+        width: 90px !important;
+        cursor: pointer !important;
+    }
+    
+    .form-help-expander [data-testid="stExpander"] details summary:hover {
+        background: #45a049 !important;
     }
     </style>
     """, unsafe_allow_html=True)
