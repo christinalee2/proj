@@ -96,7 +96,6 @@ if not user_logged_in:
             st.stop()  # Add this to prevent further execution
         st.stop()
     else:
-        # Auth was attempted but we're still not logged in
         st.error("Authentication failed or still in progress")
         col1, col2 = st.columns(2)
         with col1:
@@ -245,7 +244,7 @@ def render_upload_page():
         "Which table do you want to upload to?",
         options=display_options,
         index=available_tables.index(st.session_state.get('selected_table', 'institution')),
-        help="Choose the table where you want to add data",
+        # help="Choose the table where you want to add data",
         key="upload_table_selector"
     )
     

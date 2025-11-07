@@ -88,17 +88,17 @@ TABLE_CONFIGS = {
         display_name='Institution',
         has_standardization=True,
         description='Before adding a new institution, first ensure the institution does not currently exist in the reference tables. If there are common acronyms search for both i.e., for the IMF, search for both IMF and International Monetary Fund.  If there is a non-exact match, click Keep to add to standardization table. Otherwise, all new institutions should be entered as a full name.',
-        general_description='Institution maps standardized institution names to their institution type (layer 1: public/private; layer 2: e.g., commercial FI, multilateral climate fund) and links each to a parent or subsidiary country. See [documentation](https://www.notion.so/cpi-all/institution_list_cpi-28fefb28632b804b8b96fb7ca466937e) for details.', 
+        general_description='Institution is a two-piece reference table that operates using two datasets: \nInstitution (Classifications): Classifies standardised institution names across:  \na) Institution type layer 1: distinguishes between public and private institutions. \nb) Institution type layer 2: provides further categorisation to layer 1, such as corporations, commercial financial institutions, or private funds for private entities, and multilateral development finance institutions or governments for public entities. \nc) Institution type layer 3 (if applicable): offers additional subcategories, such as private equity funds, venture capital funds, and infrastructure funds.  \nd) Subsidiary location: Country of residence for the institution. \ne) Parent location: Country of residence for the parent institution. \n\nInstitution (Standardized Name): Maps original institution names from raw data sources to standardised CPI institution names. This prevents CPI from having multiple names for the same institution. \nFor more detailed documentation see [institution](https://www.notion.so/cpi-all/institution_list_cpi-28fefb28632b804b8b96fb7ca466937e) and [institution standandardization mapping] (https://www.notion.so/cpi-all/institution_list_all-28fefb28632b8051b09ee27a17d8b6c7).', 
         primary_key_field='id_institution_cpi',
         required_fields=['institution_cpi'],
         duplicate_check_fields=['institution_cpi'],
         fields=[
             FieldConfig('institution_cpi', 'Institution Name', 'text', required=True,
-                       help_text='Full name of the institution', detailed_help='More detailed help',
-                       placeholder='Enter institution name...'),
+                       help_text='Enter full institution name without acronyms',
+                       placeholder='Type original institution name here...'),
             FieldConfig('institution_type_layer1', 'Type Layer 1', 'select', category='main',
                        help_text='Public or Private classification', required=True),
-            FieldConfig('institution_type_layer2', 'Type Layer 2', 'select', category='main', help_text='Institution maps standardized institution names to their institution type (layer 1: public/private; layer 2: e.g., commercial FI, multilateral climate fund) and links each to a parent or subsidiary country. See [documentation](https://www.notion.so/cpi-all/institution_list_cpi-28fefb28632b804b8b96fb7ca466937e) for details. \nInstitution maps standardized institution names to their institution type (layer 1: public/private; layer 2: e.g., commercial FI, multilateral climate fund) and links each to a parent or subsidiary country. See [documentation](https://www.notion.so/cpi-all/institution_list_cpi-28fefb28632b804b8b96fb7ca466937e) for details. \nInstitution maps standardized institution names to their institution type (layer 1: public/private; layer 2: e.g., commercial FI, multilateral climate fund) and links each to a parent or subsidiary country. See [documentation](https://www.notion.so/cpi-all/institution_list_cpi-28fefb28632b804b8b96fb7ca466937e) for details.', required=True),
+            FieldConfig('institution_type_layer2', 'Type Layer 2', 'select', category='main', detailed_help='Institution maps standardized institution names to their institution type (layer 1: public/private; layer 2: e.g., commercial FI, multilateral climate fund) and links each to a parent or subsidiary country. See [documentation](https://www.notion.so/cpi-all/institution_list_cpi-28fefb28632b804b8b96fb7ca466937e) for details. \nInstitution maps standardized institution names to their institution type (layer 1: public/private; layer 2: e.g., commercial FI, multilateral climate fund) and links each to a parent or subsidiary country. See [documentation](https://www.notion.so/cpi-all/institution_list_cpi-28fefb28632b804b8b96fb7ca466937e) for details. \nInstitution maps standardized institution names to their institution type (layer 1: public/private; layer 2: e.g., commercial FI, multilateral climate fund) and links each to a parent or subsidiary country. See [documentation](https://www.notion.so/cpi-all/institution_list_cpi-28fefb28632b804b8b96fb7ca466937e) for details.', required=True),
             FieldConfig('institution_type_layer3', 'Type Layer 3', 'select', category='main', required=True),
             FieldConfig('country_sub', 'Subsidiary Country', 'select', category='main',
                        help_text='Subsidiary country where institution operates', required=True),
@@ -211,22 +211,22 @@ TABLE_CONFIGS = {
     #     ] + AUDIT_FIELDS
     # ), 
     
-    'institution_standardization': TableConfig(
-        table_name='institution_standardization',
-        display_name='Institution Mapping',
-        description='Standardization mapping table for institutions. Typically no need to edit directly. If you are adding a value, type in the original unstandardized name into the Original Name field. Type the standardized value into the Institution Standardized Name section and choose from the correct option listed (needs to be an existing institution).',
-        general_description='Institution standardization links institution names found in raw data sources to standardised CPI institution names. See [documentation](https://www.notion.so/cpi-all/institution_list_all-28fefb28632b8051b09ee27a17d8b6c7) for details.', 
-        primary_key_field='id_institution',
-        required_fields=['institution_original', 'institution_cpi'],
-        duplicate_check_fields=['institution_original'],
-        fields=[
-            FieldConfig('institution_original', 'Institution Original Name', 'text', category='main', required=True,
-                       help_text='Full name of the institution',
-                       placeholder='Enter institution name...'),
-            FieldConfig('institution_cpi', 'Institution Standardized Name', 'institution_search', category='main', required=True,
-                       help_text='Only enter if you know the mapping for standardization already or adding a new institution.'),
-        ] + AUDIT_FIELDS
-    ),
+    # 'institution_standardization': TableConfig(
+    #     table_name='institution_standardization',
+    #     display_name='Institution Mapping',
+    #     description='Standardization mapping table for institutions. Typically no need to edit directly. If you are adding a value, type in the original unstandardized name into the Original Name field. Type the standardized value into the Institution Standardized Name section and choose from the correct option listed (needs to be an existing institution).',
+    #     general_description='Institution standardization links institution names found in raw data sources to standardised CPI institution names. See [documentation](https://www.notion.so/cpi-all/institution_list_all-28fefb28632b8051b09ee27a17d8b6c7) for details.', 
+    #     primary_key_field='id_institution',
+    #     required_fields=['institution_original', 'institution_cpi'],
+    #     duplicate_check_fields=['institution_original'],
+    #     fields=[
+    #         FieldConfig('institution_original', 'Institution Original Name', 'text', category='main', required=True,
+    #                    help_text='Full name of the institution',
+    #                    placeholder='Enter institution name...'),
+    #         FieldConfig('institution_cpi', 'Institution Standardized Name', 'institution_search', category='main', required=True,
+    #                    help_text='Only enter if you know the mapping for standardization already or adding a new institution.'),
+    #     ] + AUDIT_FIELDS
+    # ),
 
     'hierarchy': TableConfig(
         table_name='hierarchy',

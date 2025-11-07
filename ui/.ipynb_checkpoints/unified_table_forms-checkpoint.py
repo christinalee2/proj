@@ -36,36 +36,53 @@ def normalize_name(name: str) -> str:
     return TextProcessor.normalize_institution_name(name).lower().strip()
 
 
-def check_exact_duplicate(input_value: str, existing_df: pd.DataFrame, primary_field: str, standardization_df: Optional[pd.DataFrame] = None) -> Optional[str]:
+def check_exact_duplicate(input_value: str, existing_df: pd.DataFrame, primary_field: str, standardization_df: Optional[pd.DataFrame] = None) -> Optional[Dict[str, str]]:
     """Check for exact duplicate in institution table and institution_standardization table then institution short for acronyms"""
     if existing_df.empty or primary_field not in existing_df.columns:
         return None
     
     normalized_input = normalize_name(input_value)
     
+    # Check main institution table first
     for _, row in existing_df.iterrows():
         existing_value = str(row.get(primary_field, '')).strip()
         if normalize_name(existing_value) == normalized_input:
-            return existing_value
+            return {
+                'type': 'main_table',
+                'match': existing_value,
+                'source': 'institution table'
+            }
     
+    # Check standardization table
     if primary_field == 'institution_cpi':
         try:
-            # standardization_df = get_table_data_cached('institution_standardization', limit=None)
             if not standardization_df.empty and 'institution_original' in standardization_df.columns:
                 for _, row in standardization_df.iterrows():
                     existing_value = str(row.get('institution_original', '')).strip()
                     if normalize_name(existing_value) == normalized_input:
-                        return existing_value
+                        # Get the standardized name
+                        standardized_name = str(row.get('institution_cpi', '')).strip()
+                        return {
+                            'type': 'standardization',
+                            'match': existing_value,
+                            'source': 'standardization table',
+                            'standardized_name': standardized_name
+                        }
         except Exception as e:
             print(f"Error checking institution_standardization: {e}")
 
-    if primary_field == 'institution_cpi' and 'institution_cpi_short' in existing_df.columns: ##### Acronym checking
+    # Check acronyms in main table
+    if primary_field == 'institution_cpi' and 'institution_cpi_short' in existing_df.columns:
             try:
                 for _, row in existing_df.iterrows():
                     existing_short = str(row.get('institution_cpi_short', '')).strip()
                     if existing_short and normalize_name(existing_short) == normalized_input:
                         existing = str(row.get('institution_cpi', '')).strip()
-                        return f"{existing_short} found as {existing}"
+                        return {
+                            'type': 'acronym',
+                            'match': f"{existing_short} found as {existing}",
+                            'source': 'institution table'
+                        }
             except Exception as e:
                 print(f"Error checking institution_cpi_short: {e}")
     
@@ -675,7 +692,14 @@ def render_unified_single_entry_form(table_name: str):
 
             exact = check_exact_duplicate(primary_value, existing_data, primary_field, standardization_data)
             if exact:
-                st.error(f"'{exact}' already exists in the {config.display_name.lower()} table.")
+                if isinstance(exact, dict):
+                    if exact['type'] == 'standardization':
+                        st.error(f"'{primary_value}' already exists in the standardization table - standardized name is '{exact['standardized_name']}'")
+                    else:
+                        st.error(f"'{primary_value}' already exists in the {exact['source']}")
+                else:
+                    # Fallback for old string format
+                    st.error(f"'{exact}' already exists in the {config.display_name.lower()} table.")
                 
                 st.session_state['hierarchy_match_name'] = exact
                 st.session_state['hierarchy_match_type'] = 'exact'
@@ -684,10 +708,10 @@ def render_unified_single_entry_form(table_name: str):
             try:
                 fuzzy = check_fuzzy_matches(primary_value, existing_data, primary_field)
                 if fuzzy:
-                    st.info(f"Found {len(fuzzy)} similar {config.display_name.lower()}(s)")
+                    st.info(f"Found {len(fuzzy)} similar {config.display_name.lower()}(s).")
                     # st.caption("Similar entries found. Click 'Keep' to use your entry and create a standardization mapping.")
                     if config.has_standardization:
-                        st.caption("Similar entries found. Click 'Keep' to use your entry and create a standardization mapping.")
+                        st.caption("Similar entries found. If there is a true match click 'Keep' to create a standardization mapping between your entered name and the standardized name. Otherwise, proceed with institution form to enter a fully new institution.")
                     else:
                         st.caption("Similar entries found.")
 
@@ -1012,7 +1036,25 @@ def render_unified_single_entry_form(table_name: str):
         cols = st.columns(2)
         for i, field_config in enumerate(required_fields):
             with cols[i % 2]:
-                form_data[field_config.name] = render_form_field(field_config, dropdown_options, f"{table_name}_req_{i}", existing_data)
+                # Create columns for field and help button
+                field_col, help_col = st.columns([0.9, 0.1])
+                
+                with field_col:
+                    form_data[field_config.name] = render_form_field(field_config, dropdown_options, f"{table_name}_req_{i}", existing_data)
+                
+                with help_col:
+                    if hasattr(field_config, 'detailed_help') and field_config.detailed_help:
+                        help_key = f"help_{field_config.name}_req_{i}"
+                        if st.button("➕", key=help_key, help="Click for detailed instructions", use_container_width=True):
+                            st.session_state[f"{help_key}_show"] = not st.session_state.get(f"{help_key}_show", False)
+                
+                # Show help content if toggled
+                if hasattr(field_config, 'detailed_help') and field_config.detailed_help:
+                    help_key = f"help_{field_config.name}_req_{i}"
+                    if st.session_state.get(f"{help_key}_show", False):
+                        st.info(field_config.detailed_help)
+            # with cols[i % 2]:
+            #     form_data[field_config.name] = render_form_field(field_config, dropdown_options, f"{table_name}_req_{i}", existing_data)
     
     if optional_main_fields:
         st.subheader("Secondary Fields")
@@ -2152,317 +2194,317 @@ def execute_unified_bulk_insert(validation_results: List[ValidationResult], conf
 
 
 ############################################## New, adding the hierarchy stuff ################################################
-def render_institution_submission_with_hierarchy(
-    form_data: Dict[str, Any], 
-    config: TableConfig, 
-    existing_data: pd.DataFrame,
-    standardization_data: pd.DataFrame,
-    dropdown_options: Dict[str, List[str]]
-):
-    """Enhanced institution submission with hierarchy support"""
+# def render_institution_submission_with_hierarchy(
+#     form_data: Dict[str, Any], 
+#     config: TableConfig, 
+#     existing_data: pd.DataFrame,
+#     standardization_data: pd.DataFrame,
+#     dropdown_options: Dict[str, List[str]]
+# ):
+#     """Enhanced institution submission with hierarchy support"""
     
-    if st.button(f"Add {config.display_name}", type="primary", key="submit_institution"):
-        if not form_data.get('institution_cpi'):
-            st.error("Institution name is required")
-            return
+#     if st.button(f"Add {config.display_name}", type="primary", key="submit_institution"):
+#         if not form_data.get('institution_cpi'):
+#             st.error("Institution name is required")
+#             return
         
-        username = st.session_state.get('username', 'analyst')
-        institution_name = form_data['institution_cpi']
+#         username = st.session_state.get('username', 'analyst')
+#         institution_name = form_data['institution_cpi']
         
-        # Check for duplicates and fuzzy matches
-        exact_duplicate = check_exact_duplicate(
-            institution_name, existing_data, 'institution_cpi', standardization_data
-        )
+#         # Check for duplicates and fuzzy matches
+#         exact_duplicate = check_exact_duplicate(
+#             institution_name, existing_data, 'institution_cpi', standardization_data
+#         )
         
-        # Initialize hierarchy service
-        hierarchy_service = HierarchyService()
+#         # Initialize hierarchy service
+#         hierarchy_service = HierarchyService()
         
-        if exact_duplicate:
-            # Handle exact duplicate with hierarchy option
-            st.error(f"Institution '{institution_name}' already exists as '{exact_duplicate}'")
+#         if exact_duplicate:
+#             # Handle exact duplicate with hierarchy option
+#             st.error(f"Institution '{institution_name}' already exists as '{exact_duplicate}'")
             
-            # Add hierarchy option for duplicates
-            hierarchy_data = render_hierarchy_options_for_duplicates(
-                institution_name=institution_name,
-                duplicate_name=exact_duplicate,
-                existing_institutions=existing_data,
-                form_key="duplicate_hierarchy"
-            )
+#             # Add hierarchy option for duplicates
+#             hierarchy_data = render_hierarchy_options_for_duplicates(
+#                 institution_name=institution_name,
+#                 duplicate_name=exact_duplicate,
+#                 existing_institutions=existing_data,
+#                 form_key="duplicate_hierarchy"
+#             )
             
-            if hierarchy_data:
-                if hierarchy_data.get('cancel'):
-                    st.info("Hierarchy creation cancelled")
-                    return
+#             if hierarchy_data:
+#                 if hierarchy_data.get('cancel'):
+#                     st.info("Hierarchy creation cancelled")
+#                     return
                 
-                # Create hierarchy relationship
-                result = hierarchy_service.create_hierarchy_entry(
-                    parent_institution=hierarchy_data['parent_institution'],
-                    child_institution=hierarchy_data['child_institution'],
-                    percent_ownership=hierarchy_data.get('percent_ownership'),
-                    relationship_type=hierarchy_data.get('relationship_type'),
-                    user=username,
-                    existing_institutions=existing_data,    
-                    existing_hierarchy=existing_hierarchy_data
-                )
+#                 # Create hierarchy relationship
+#                 result = hierarchy_service.create_hierarchy_entry(
+#                     parent_institution=hierarchy_data['parent_institution'],
+#                     child_institution=hierarchy_data['child_institution'],
+#                     percent_ownership=hierarchy_data.get('percent_ownership'),
+#                     relationship_type=hierarchy_data.get('relationship_type'),
+#                     user=username,
+#                     existing_institutions=existing_data,    
+#                     existing_hierarchy=existing_hierarchy_data
+#                 )
                 
-                if result['success']:
-                    st.success(f"Hierarchy relationship created successfully!")
-                    st.cache_data.clear()
+#                 if result['success']:
+#                     st.success(f"Hierarchy relationship created successfully!")
+#                     st.cache_data.clear()
                     
-                    # Clear hierarchy session state
-                    keys_to_clear = [k for k in st.session_state.keys() if 'hierarchy' in k.lower()]
-                    for key in keys_to_clear:
-                        if key in st.session_state:
-                            del st.session_state[key]
+#                     # Clear hierarchy session state
+#                     keys_to_clear = [k for k in st.session_state.keys() if 'hierarchy' in k.lower()]
+#                     for key in keys_to_clear:
+#                         if key in st.session_state:
+#                             del st.session_state[key]
                     
-                    st.rerun()
-                else:
-                    st.error(f"Failed to create hierarchy: {result['message']}")
+#                     st.rerun()
+#                 else:
+#                     st.error(f"Failed to create hierarchy: {result['message']}")
             
-            return
+#             return
         
-        # Check for fuzzy matches
-        fuzzy_matches = check_fuzzy_matches(institution_name, existing_data, 'institution_cpi')
+#         # Check for fuzzy matches
+#         fuzzy_matches = check_fuzzy_matches(institution_name, existing_data, 'institution_cpi')
         
-        if fuzzy_matches:
-            # Show fuzzy matches with Keep option and hierarchy option
-            st.warning(f"Found {len(fuzzy_matches)} similar institution(s):")
+#         if fuzzy_matches:
+#             # Show fuzzy matches with Keep option and hierarchy option
+#             st.warning(f"Found {len(fuzzy_matches)} similar institution(s):")
             
-            best_match = fuzzy_matches[0]
-            match_name, match_score = best_match
+#             best_match = fuzzy_matches[0]
+#             match_name, match_score = best_match
             
-            st.info(f"Best match: **{match_name}** ({match_score:.1f}% similarity)")
+#             st.info(f"Best match: **{match_name}** ({match_score:.1f}% similarity)")
             
-            col1, col2 = st.columns(2)
+#             col1, col2 = st.columns(2)
             
-            standardization_service = StandardizationService()
+#             standardization_service = StandardizationService()
             
-            with col1:
-                if st.button("Keep (Add to Standardization)", key="keep_fuzzy"):
-                    result = standardization_service.process_keep_institution(institution_name, match_name)
-                    if result['success']:
-                        st.success("Added to standardization table!")
-                        st.cache_data.clear()
-                        st.rerun()
-                    else:
-                        st.error(f"Failed: {result['message']}")
+#             with col1:
+#                 if st.button("Keep (Add to Standardization)", key="keep_fuzzy"):
+#                     result = standardization_service.process_keep_institution(institution_name, match_name)
+#                     if result['success']:
+#                         st.success("Added to standardization table!")
+#                         st.cache_data.clear()
+#                         st.rerun()
+#                     else:
+#                         st.error(f"Failed: {result['message']}")
             
-            with col2:
-                if st.button("Create New Institution", key="create_new_fuzzy"):
-                    # Process as new institution (will handle below)
-                    fuzzy_matches = []  # Clear to proceed to new institution logic
+#             with col2:
+#                 if st.button("Create New Institution", key="create_new_fuzzy"):
+#                     # Process as new institution (will handle below)
+#                     fuzzy_matches = []  # Clear to proceed to new institution logic
             
-            # Add hierarchy option for fuzzy matches 
-            if fuzzy_matches:  # Only show if user hasn't chosen to create new
-                hierarchy_data = render_hierarchy_options_for_fuzzy_matches(
-                    institution_name=institution_name,
-                    matched_name=match_name,
-                    existing_institutions=existing_data,
-                    form_key="fuzzy_hierarchy"
-                )
+#             # Add hierarchy option for fuzzy matches 
+#             if fuzzy_matches:  # Only show if user hasn't chosen to create new
+#                 hierarchy_data = render_hierarchy_options_for_fuzzy_matches(
+#                     institution_name=institution_name,
+#                     matched_name=match_name,
+#                     existing_institutions=existing_data,
+#                     form_key="fuzzy_hierarchy"
+#                 )
                 
-                if hierarchy_data:
-                    if hierarchy_data.get('cancel'):
-                        st.info("Hierarchy creation cancelled")
-                        return
+#                 if hierarchy_data:
+#                     if hierarchy_data.get('cancel'):
+#                         st.info("Hierarchy creation cancelled")
+#                         return
                     
-                    # Create hierarchy relationship
-                    result = hierarchy_service.create_hierarchy_entry(
-                        parent_institution=hierarchy_data['parent_institution'],
-                        child_institution=hierarchy_data['child_institution'],
-                        percent_ownership=hierarchy_data.get('percent_ownership'),
-                        relationship_type=hierarchy_data.get('relationship_type'),
-                        user=username,
-                        existing_institutions=existing_data,    
-                        existing_hierarchy=existing_hierarchy_data
-                    )
+#                     # Create hierarchy relationship
+#                     result = hierarchy_service.create_hierarchy_entry(
+#                         parent_institution=hierarchy_data['parent_institution'],
+#                         child_institution=hierarchy_data['child_institution'],
+#                         percent_ownership=hierarchy_data.get('percent_ownership'),
+#                         relationship_type=hierarchy_data.get('relationship_type'),
+#                         user=username,
+#                         existing_institutions=existing_data,    
+#                         existing_hierarchy=existing_hierarchy_data
+#                     )
                     
-                    if result['success']:
-                        st.success("Hierarchy relationship created successfully!")
-                        st.cache_data.clear()
+#                     if result['success']:
+#                         st.success("Hierarchy relationship created successfully!")
+#                         st.cache_data.clear()
                         
-                        # Clear hierarchy session state
-                        keys_to_clear = [k for k in st.session_state.keys() if 'hierarchy' in k.lower()]
-                        for key in keys_to_clear:
-                            if key in st.session_state:
-                                del st.session_state[key]
+#                         # Clear hierarchy session state
+#                         keys_to_clear = [k for k in st.session_state.keys() if 'hierarchy' in k.lower()]
+#                         for key in keys_to_clear:
+#                             if key in st.session_state:
+#                                 del st.session_state[key]
                         
-                        st.rerun()
-                    else:
-                        st.error(f"Failed to create hierarchy: {result['message']}")
+#                         st.rerun()
+#                     else:
+#                         st.error(f"Failed to create hierarchy: {result['message']}")
                 
-                return
+#                 return
         
-        # No duplicates or fuzzy matches - create new institution
-        if not exact_duplicate and not fuzzy_matches:
-            # Auto-populate data
-            enhanced_data = auto_populate_data(form_data, username)
+#         # No duplicates or fuzzy matches - create new institution
+#         if not exact_duplicate and not fuzzy_matches:
+#             # Auto-populate data
+#             enhanced_data = auto_populate_data(form_data, username)
             
-            # Create the institution
-            institution_service = InstitutionService()
-            result = institution_service.create_institution(
-                institution_name=enhanced_data['institution_cpi'],
-                institution_type_layer1=enhanced_data.get('institution_type_layer1'),
-                institution_type_layer2=enhanced_data.get('institution_type_layer2'),
-                institution_type_layer3=enhanced_data.get('institution_type_layer3'),
-                country_sub=enhanced_data.get('country_sub'),
-                country_parent=enhanced_data.get('country_parent'),
-                double_counting_risk=enhanced_data.get('double_counting_risk'),
-                institution_cpi_short=enhanced_data.get('institution_cpi_short'),
-                contact_info=enhanced_data.get('contact_info'),
-                comments=enhanced_data.get('comments'),
-                user=username
-            )
+#             # Create the institution
+#             institution_service = InstitutionService()
+#             result = institution_service.create_institution(
+#                 institution_name=enhanced_data['institution_cpi'],
+#                 institution_type_layer1=enhanced_data.get('institution_type_layer1'),
+#                 institution_type_layer2=enhanced_data.get('institution_type_layer2'),
+#                 institution_type_layer3=enhanced_data.get('institution_type_layer3'),
+#                 country_sub=enhanced_data.get('country_sub'),
+#                 country_parent=enhanced_data.get('country_parent'),
+#                 double_counting_risk=enhanced_data.get('double_counting_risk'),
+#                 institution_cpi_short=enhanced_data.get('institution_cpi_short'),
+#                 contact_info=enhanced_data.get('contact_info'),
+#                 comments=enhanced_data.get('comments'),
+#                 user=username
+#             )
             
-            if result['success']:
-                st.success(f"Institution '{result['institution_name']}' created successfully!")
+#             if result['success']:
+#                 st.success(f"Institution '{result['institution_name']}' created successfully!")
                 
-                # Optional hierarchy creation for new institutions
-                hierarchy_data = render_new_institution_hierarchy_option(
-                    institution_name=result['institution_name'],
-                    existing_institutions=existing_data,
-                    form_key="new_institution_hierarchy"
-                )
+#                 # Optional hierarchy creation for new institutions
+#                 hierarchy_data = render_new_institution_hierarchy_option(
+#                     institution_name=result['institution_name'],
+#                     existing_institutions=existing_data,
+#                     form_key="new_institution_hierarchy"
+#                 )
                 
-                if hierarchy_data:
-                    if hierarchy_data['mode'] == 'new_as_parent':
-                        # New institution is parent
-                        st.info("Creating hierarchy relationship...")
-                        time.sleep(1)  # Brief delay to ensure institution is created
+#                 if hierarchy_data:
+#                     if hierarchy_data['mode'] == 'new_as_parent':
+#                         # New institution is parent
+#                         st.info("Creating hierarchy relationship...")
+#                         time.sleep(1)  # Brief delay to ensure institution is created
                         
-                        # Refresh data to get new institution ID
-                        st.cache_data.clear()
+#                         # Refresh data to get new institution ID
+#                         st.cache_data.clear()
                         
-                        hierarchy_result = hierarchy_service.create_hierarchy_entry(
-                            parent_institution=hierarchy_data['parent_institution'],
-                            child_institution=hierarchy_data['child_institution'],
-                            percent_ownership=hierarchy_data.get('percent_ownership'),
-                            relationship_type=hierarchy_data.get('relationship_type'),
-                            user=username,
-                            existing_institutions=existing_data,    
-                            existing_hierarchy=existing_hierarchy_data
-                        )
+#                         hierarchy_result = hierarchy_service.create_hierarchy_entry(
+#                             parent_institution=hierarchy_data['parent_institution'],
+#                             child_institution=hierarchy_data['child_institution'],
+#                             percent_ownership=hierarchy_data.get('percent_ownership'),
+#                             relationship_type=hierarchy_data.get('relationship_type'),
+#                             user=username,
+#                             existing_institutions=existing_data,    
+#                             existing_hierarchy=existing_hierarchy_data
+#                         )
                     
-                    elif hierarchy_data['mode'] == 'new_as_child':
-                        # New institution is child
-                        hierarchy_result = hierarchy_service.create_hierarchy_entry(
-                            parent_institution=hierarchy_data['parent_institution'],
-                            child_institution=hierarchy_data['child_institution'],
-                            percent_ownership=hierarchy_data.get('percent_ownership'),
-                            relationship_type=hierarchy_data.get('relationship_type'),
-                            user=username,
-                            existing_institutions=existing_data,    
-                            existing_hierarchy=existing_hierarchy_data
-                        )
+#                     elif hierarchy_data['mode'] == 'new_as_child':
+#                         # New institution is child
+#                         hierarchy_result = hierarchy_service.create_hierarchy_entry(
+#                             parent_institution=hierarchy_data['parent_institution'],
+#                             child_institution=hierarchy_data['child_institution'],
+#                             percent_ownership=hierarchy_data.get('percent_ownership'),
+#                             relationship_type=hierarchy_data.get('relationship_type'),
+#                             user=username,
+#                             existing_institutions=existing_data,    
+#                             existing_hierarchy=existing_hierarchy_data
+#                         )
                     
-                    if 'hierarchy_result' in locals() and hierarchy_result['success']:
-                        st.success("Hierarchy relationship created successfully!")
-                    elif 'hierarchy_result' in locals():
-                        st.error(f"Hierarchy creation failed: {hierarchy_result['message']}")
+#                     if 'hierarchy_result' in locals() and hierarchy_result['success']:
+#                         st.success("Hierarchy relationship created successfully!")
+#                     elif 'hierarchy_result' in locals():
+#                         st.error(f"Hierarchy creation failed: {hierarchy_result['message']}")
                 
-                # Clear caches and reset form
-                st.cache_data.clear()
-                session_key = f'{config.table_name}_reference_data'
-                if session_key in st.session_state:
-                    del st.session_state[session_key]
+#                 # Clear caches and reset form
+#                 st.cache_data.clear()
+#                 session_key = f'{config.table_name}_reference_data'
+#                 if session_key in st.session_state:
+#                     del st.session_state[session_key]
                 
-                st.rerun()
-            else:
-                st.error(f"Failed to create institution: {result['message']}")
+#                 st.rerun()
+#             else:
+#                 st.error(f"Failed to create institution: {result['message']}")
 
 
-def render_standard_submission(
-    form_data: Dict[str, Any], 
-    config: TableConfig, 
-    table_name: str, 
-    existing_data: pd.DataFrame
-):
-    """Standard submission for non-institution tables"""
+# def render_standard_submission(
+#     form_data: Dict[str, Any], 
+#     config: TableConfig, 
+#     table_name: str, 
+#     existing_data: pd.DataFrame
+# ):
+#     """Standard submission for non-institution tables"""
     
-    if st.button(f"Add {config.display_name}", type="primary", key=f"submit_{table_name}"):
-        missing_fields = []
-        for field_name in config.required_fields:
-            if not form_data.get(field_name):
-                missing_fields.append(field_name)
+#     if st.button(f"Add {config.display_name}", type="primary", key=f"submit_{table_name}"):
+#         missing_fields = []
+#         for field_name in config.required_fields:
+#             if not form_data.get(field_name):
+#                 missing_fields.append(field_name)
         
-        if missing_fields:
-            st.error(f"Required fields missing: {', '.join(missing_fields)}")
-            return
+#         if missing_fields:
+#             st.error(f"Required fields missing: {', '.join(missing_fields)}")
+#             return
         
-        username = st.session_state.get('username', 'analyst')
+#         username = st.session_state.get('username', 'analyst')
         
-        if config.duplicate_check_fields:
-            if len(config.duplicate_check_fields) > 1:
-                # Use compound duplicate checking for multiple fields
-                compound_duplicate = check_compound_duplicate(form_data, existing_data, config.duplicate_check_fields)
+#         if config.duplicate_check_fields:
+#             if len(config.duplicate_check_fields) > 1:
+#                 # Use compound duplicate checking for multiple fields
+#                 compound_duplicate = check_compound_duplicate(form_data, existing_data, config.duplicate_check_fields)
                 
-                if compound_duplicate:
-                    st.error(f"Entry already exists with these values: {compound_duplicate}")
-                    return
+#                 if compound_duplicate:
+#                     st.error(f"Entry already exists with these values: {compound_duplicate}")
+#                     return
                 
-                # Also check fuzzy matches on the primary field for suggestions
-                primary_field = config.duplicate_check_fields[0]
-                input_value = form_data.get(primary_field)
-                if input_value:
-                    fuzzy_matches = check_fuzzy_matches(input_value, existing_data, primary_field)
-                    if fuzzy_matches:
-                        st.warning(f"Found {len(fuzzy_matches)} similar entries for '{primary_field}':")
-                        for name, score in fuzzy_matches[:3]:
-                            st.write(f"- {name} ({score:.1f}% match)")
+#                 # Also check fuzzy matches on the primary field for suggestions
+#                 primary_field = config.duplicate_check_fields[0]
+#                 input_value = form_data.get(primary_field)
+#                 if input_value:
+#                     fuzzy_matches = check_fuzzy_matches(input_value, existing_data, primary_field)
+#                     if fuzzy_matches:
+#                         st.warning(f"Found {len(fuzzy_matches)} similar entries for '{primary_field}':")
+#                         for name, score in fuzzy_matches[:3]:
+#                             st.write(f"- {name} ({score:.1f}% match)")
                         
-                        if not st.button("Continue Anyway", key="continue_despite_fuzzy"):
-                            return
-            else:
-                # Use single field duplicate checking (existing logic)
-                primary_field = config.duplicate_check_fields[0]
-                input_value = form_data.get(primary_field)
+#                         if not st.button("Continue Anyway", key="continue_despite_fuzzy"):
+#                             return
+#             else:
+#                 # Use single field duplicate checking (existing logic)
+#                 primary_field = config.duplicate_check_fields[0]
+#                 input_value = form_data.get(primary_field)
                 
-                if input_value:
-                    exact_duplicate = check_exact_duplicate(input_value, existing_data, primary_field)
+#                 if input_value:
+#                     exact_duplicate = check_exact_duplicate(input_value, existing_data, primary_field)
                     
-                    if exact_duplicate:
-                        st.error(f"Entry already exists: {exact_duplicate}")
-                        return
+#                     if exact_duplicate:
+#                         st.error(f"Entry already exists: {exact_duplicate}")
+#                         return
                     
-                    fuzzy_matches = check_fuzzy_matches(input_value, existing_data, primary_field)
-                    if fuzzy_matches:
-                        st.warning(f"Found {len(fuzzy_matches)} similar entries:")
-                        for name, score in fuzzy_matches[:3]:
-                            st.write(f"- {name} ({score:.1f}% match)")
+#                     fuzzy_matches = check_fuzzy_matches(input_value, existing_data, primary_field)
+#                     if fuzzy_matches:
+#                         st.warning(f"Found {len(fuzzy_matches)} similar entries:")
+#                         for name, score in fuzzy_matches[:3]:
+#                             st.write(f"- {name} ({score:.1f}% match)")
                         
-                        # if not st.button("Continue Anyway", key="continue_despite_fuzzy"):
-                        #     return
+#                         # if not st.button("Continue Anyway", key="continue_despite_fuzzy"):
+#                         #     return
                             
-            # primary_field = config.duplicate_check_fields[0]
-            # input_value = form_data.get(primary_field)
+#             # primary_field = config.duplicate_check_fields[0]
+#             # input_value = form_data.get(primary_field)
             
-            # if input_value:
-            #     exact_duplicate = check_exact_duplicate(input_value, existing_data, primary_field)
+#             # if input_value:
+#             #     exact_duplicate = check_exact_duplicate(input_value, existing_data, primary_field)
                 
-            #     if exact_duplicate:
-            #         st.error(f"Entry already exists: {exact_duplicate}")
-            #         return
+#             #     if exact_duplicate:
+#             #         st.error(f"Entry already exists: {exact_duplicate}")
+#             #         return
                 
-            #     fuzzy_matches = check_fuzzy_matches(input_value, existing_data, primary_field)
-            #     if fuzzy_matches:
-            #         st.warning(f"Found {len(fuzzy_matches)} similar entries:")
-            #         for name, score in fuzzy_matches[:3]:
-            #             st.write(f"- {name} ({score:.1f}% match)")
+#             #     fuzzy_matches = check_fuzzy_matches(input_value, existing_data, primary_field)
+#             #     if fuzzy_matches:
+#             #         st.warning(f"Found {len(fuzzy_matches)} similar entries:")
+#             #         for name, score in fuzzy_matches[:3]:
+#             #             st.write(f"- {name} ({score:.1f}% match)")
                     
-            #         if not st.button("Continue Anyway", key="continue_despite_fuzzy"):
-            #             return
+#             #         if not st.button("Continue Anyway", key="continue_despite_fuzzy"):
+#             #             return
         
-        enhanced_data = auto_populate_data(form_data, username)
+#         enhanced_data = auto_populate_data(form_data, username)
         
-        query_service = QueryService()
-        success = query_service.execute_insert(table_name, enhanced_data)
+#         query_service = QueryService()
+#         success = query_service.execute_insert(table_name, enhanced_data)
         
-        if success:
-            st.success(f"{config.display_name} created successfully!")
-            st.cache_data.clear()
-            session_key = f'{table_name}_reference_data'
-            if session_key in st.session_state:
-                del st.session_state[session_key]
-            st.rerun()
-        else:
-            st.error(f"Failed to create {config.display_name}")
+#         if success:
+#             st.success(f"{config.display_name} created successfully!")
+#             st.cache_data.clear()
+#             session_key = f'{table_name}_reference_data'
+#             if session_key in st.session_state:
+#                 del st.session_state[session_key]
+#             st.rerun()
+#         else:
+#             st.error(f"Failed to create {config.display_name}")
