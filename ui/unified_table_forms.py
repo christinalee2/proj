@@ -29,48 +29,6 @@ class ValidationResult:
     data: Dict
 
 
-def add_form_help_css():
-    """Add custom CSS for form help expanders only - aggressive version"""
-    st.markdown("""
-    <style>
-    .form-help-expander {
-        display: flex !important;
-        justify-content: flex-start !important;
-    }
-    
-    .form-help-expander > div {
-        width: auto !important;
-        flex: none !important;
-    }
-    
-    .form-help-expander [data-testid="stExpander"] {
-        width: 100px !important;
-        max-width: 100px !important;
-        min-width: 80px !important;
-        flex: none !important;
-    }
-    
-    .form-help-expander [data-testid="stExpander"] details {
-        width: 100px !important;
-    }
-    
-    .form-help-expander [data-testid="stExpander"] details summary {
-        background: #4CAF50 !important;  /* Green so you can see it working */
-        color: white !important;
-        padding: 0.3rem 0.6rem !important;
-        border-radius: 8px !important;
-        font-size: 11px !important;
-        text-align: center !important;
-        width: 90px !important;
-        cursor: pointer !important;
-    }
-    
-    .form-help-expander [data-testid="stExpander"] details summary:hover {
-        background: #45a049 !important;
-    }
-    </style>
-    """, unsafe_allow_html=True)
-
 
 def normalize_name(name: str) -> str:
     """Normalize name for comparison"""
@@ -1079,12 +1037,42 @@ def render_unified_single_entry_form(table_name: str):
         cols = st.columns(2)
         for i, field_config in enumerate(required_fields):
             with cols[i % 2]:
-                form_data[field_config.name] = render_form_field(field_config, dropdown_options, f"{table_name}_req_{i}", existing_data)
-                if hasattr(field_config, 'detailed_help') and field_config.detailed_help:
-                    st.markdown('<div class="form-help-expander">', unsafe_allow_html=True)
-                    with st.expander("+", expanded=False):
-                        st.markdown(field_config.detailed_help)
-                    st.markdown('</div>', unsafe_allow_html=True)
+                field_col, help_col = st.columns([0.9, 0.1])
+                help_key = f"help_{field_config.name}_opt_{i}"
+    
+                with field_col:
+                    form_data[field_config.name] = render_form_field(
+                        field_config, dropdown_options, f"{table_name}_opt_{i}", existing_data
+                    )
+    
+                with help_col:
+                    if getattr(field_config, "detailed_help", None):
+                        show_help = st.toggle(
+                            "➕", 
+                            key=help_key, 
+                            help="Click for detailed instructions",
+                            label_visibility="collapsed"
+                        )
+    
+                        if show_help:
+                            st.info(field_config.detailed_help)
+                        
+                # field_col, help_col = st.columns([0.9, 0.1])
+                
+                # with field_col:
+                #     form_data[field_config.name] = render_form_field(field_config, dropdown_options, f"{table_name}_opt_{i}", existing_data)
+                
+                # with help_col:
+                #     if hasattr(field_config, 'detailed_help') and field_config.detailed_help:
+                #         help_key = f"help_{field_config.name}_opt_{i}"
+                #         if st.button("+", key=help_key, help="Click for detailed instructions", use_container_width=True):
+                #             st.session_state[f"{help_key}_show"] = not st.session_state.get(f"{help_key}_show", False)
+                
+                # # Show help content if toggled
+                # if hasattr(field_config, 'detailed_help') and field_config.detailed_help:
+                #     help_key = f"help_{field_config.name}_opt_{i}"
+                #     if st.session_state.get(f"{help_key}_show", False):
+                #         st.info(field_config.detailed_help)
                     
                 # if hasattr(field_config, 'detailed_help') and field_config.detailed_help:
                 #     with st.expander("ℹ️ Documentation", expanded=False):
