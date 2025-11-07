@@ -29,6 +29,36 @@ class ValidationResult:
     data: Dict
 
 
+def add_form_help_css():
+    """custom CSS for just the little detailed_help buttons (otherwise takes up full column width)"""
+    st.markdown("""
+    <style>
+    .form-help-expander .streamlit-expanderHeader {
+        background: transparent !important;
+        border: 1px solid #d4d4d4 !important;
+        border-radius: 4px !important;
+        padding: 0.2rem 0.4rem !important;
+        font-size: 12px !important;
+        width: fit-content !important;
+        margin: 0.2rem 0 !important;
+        color: #666 !important;
+    }
+    .form-help-expander .streamlit-expanderHeader:hover {
+        background-color: #f8f9fa !important;
+        color: #333 !important;
+    }
+    .form-help-expander .streamlit-expanderHeader p {
+        margin: 0 !important;
+        font-weight: normal !important;
+    }
+    .form-help-expander .streamlit-expanderContent {
+        padding: 0.5rem !important;
+        margin-top: 0.2rem !important;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
+
 def normalize_name(name: str) -> str:
     """Normalize name for comparison"""
     if not name:
@@ -1037,10 +1067,15 @@ def render_unified_single_entry_form(table_name: str):
         for i, field_config in enumerate(required_fields):
             with cols[i % 2]:
                 form_data[field_config.name] = render_form_field(field_config, dropdown_options, f"{table_name}_req_{i}", existing_data)
-    
                 if hasattr(field_config, 'detailed_help') and field_config.detailed_help:
-                    with st.expander("ℹ️ Documentation", expanded=False):
+                    st.markdown('<div class="form-help-expander">', unsafe_allow_html=True)
+                    with st.expander("+", expanded=False):
                         st.markdown(field_config.detailed_help)
+                    st.markdown('</div>', unsafe_allow_html=True)
+                    
+                # if hasattr(field_config, 'detailed_help') and field_config.detailed_help:
+                #     with st.expander("ℹ️ Documentation", expanded=False):
+                #         st.markdown(field_config.detailed_help)
             # with cols[i % 2]:
             #     field_col, help_col = st.columns([0.9, 0.1])
                 
