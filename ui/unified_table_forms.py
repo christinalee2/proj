@@ -1037,10 +1037,9 @@ def render_unified_single_entry_form(table_name: str):
         for i, field_config in enumerate(required_fields):
             with cols[i % 2]:
                 form_data[field_config.name] = render_form_field(field_config, dropdown_options, f"{table_name}_req_{i}", existing_data)
-                
-                # Add small expander for detailed help
+    
                 if hasattr(field_config, 'detailed_help') and field_config.detailed_help:
-                    with st.expander("+", expanded=False):
+                    with st.expander("ℹ️ Documentation", expanded=False):
                         st.markdown(field_config.detailed_help)
             # with cols[i % 2]:
             #     field_col, help_col = st.columns([0.9, 0.1])
