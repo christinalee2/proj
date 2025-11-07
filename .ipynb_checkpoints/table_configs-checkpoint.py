@@ -92,14 +92,7 @@ TABLE_CONFIGS = {
         display_name='Institution',
         has_standardization=True,
         description="First, check to see if the original institution name currently exists in the reference table. If there is an 'institution already exists' message, you do not need to update this institution. If there is an",
-        general_description="""Institution is a two-piece reference table that operates using two datasets: \nInstitution (Classifications): Classifies standardised institution names across: 
-        a) Institution type layer 1: distinguishes between public and private institutions. 
-        b) Institution type layer 2: provides further categorisation to layer 1, such as corporations, commercial financial institutions, or private funds for private entities, and multilateral development finance institutions or governments for public entities. 
-        c) Institution type layer 3 (if applicable): offers additional subcategories, such as private equity funds, venture capital funds, and infrastructure funds. 
-        d) Subsidiary location: Country of residence for the institution. 
-        e) Parent location: Country of residence for the parent institution. 
-        Institution (Standardized Name): Maps original institution names from raw data sources to standardised CPI institution names. This prevents CPI from having multiple names for the same institution. 
-        For more detailed documentation see [institution](https://www.notion.so/cpi-all/institution_list_cpi-28fefb28632b804b8b96fb7ca466937e) and [institution standandardization mapping](https://www.notion.so/cpi-all/institution_list_all-28fefb28632b8051b09ee27a17d8b6c7).""", 
+        general_description='Institution is a two-piece reference table that operates using two datasets: \nInstitution (Classifications): Classifies standardised institution names across: \na) Institution type layer 1: distinguishes between public and private institutions. \nb) Institution type layer 2: provides further categorisation to layer 1, such as corporations, commercial financial institutions, or private funds for private entities, and multilateral development finance institutions or governments for public entities. \nc) Institution type layer 3 (if applicable): offers additional subcategories, such as private equity funds, venture capital funds, and infrastructure funds. \nd) Subsidiary location: Country of residence for the institution. \ne) Parent location: Country of residence for the parent institution. \n\nInstitution (Standardized Name): Maps original institution names from raw data sources to standardised CPI institution names. This prevents CPI from having multiple names for the same institution. \n\nFor more detailed documentation see [institution](https://www.notion.so/cpi-all/institution_list_cpi-28fefb28632b804b8b96fb7ca466937e) and [institution standandardization mapping](https://www.notion.so/cpi-all/institution_list_all-28fefb28632b8051b09ee27a17d8b6c7).', 
         primary_key_field='id_institution_cpi',
         required_fields=['institution_cpi'],
         duplicate_check_fields=['institution_cpi'],
