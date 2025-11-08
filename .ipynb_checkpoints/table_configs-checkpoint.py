@@ -92,12 +92,13 @@ TABLE_CONFIGS = {
         display_name='Institution',
         has_standardization=True,
         description="First, check to see if the original institution name currently exists in the reference table. If there is an 'institution already exists' message, you do not need to update this institution. If there is an",
-        general_description="""Institution is a two-piece reference table that operates using two datasets: 
-Institution (Classifications): Classifies standardised institution names across: 
-a) Institution type layer 1: distinguishes between public and private institutions. 
-b) Institution type layer 2: provides further categorisation to layer 1, such as corporations, commercial financial institutions, or private funds for private entities, and multilateral development finance institutions or governments for public entities. 
-c) Institution type layer 3 (if applicable): offers additional subcategories, such as private equity funds, venture capital funds, and infrastructure funds. 
-d) Subsidiary location: Country of residence for the institution. 
+        general_description="""Institution is a two-piece reference table that operates using two datasets:
+        
+Institution (Classifications): Classifies standardised institution names across:  
+a) Institution type layer 1: distinguishes between public and private institutions.  
+b) Institution type layer 2: provides further categorisation to layer 1, such as corporations, commercial financial institutions, or private funds for private entities, and multilateral development finance institutions or governments for public entities.  
+c) Institution type layer 3 (if applicable): offers additional subcategories, such as private equity funds, venture capital funds, and infrastructure funds.  
+d) Subsidiary location: Country of residence for the institution.  
 e) Parent location: Country of residence for the parent institution. 
         
 Institution (Standardized Name): Maps original institution names from raw data sources to standardised CPI institution names. This prevents CPI from having multiple names for the same institution.
@@ -110,6 +111,7 @@ For more detailed documentation see [institution](https://www.notion.so/cpi-all/
             FieldConfig('institution_cpi', 'Institution Name', 'text', required=True,
                        help_text='Enter full institution name without acronyms',
                        placeholder='Type original institution name here...'),
+            
             FieldConfig('institution_type_layer1', 'Type Layer 1', 'select', category='main',
                        detailed_help="""
 | Category | Definition | Examples |
@@ -118,15 +120,76 @@ For more detailed documentation see [institution](https://www.notion.so/cpi-all/
 | Private | Organisations that are majority-owned (>50%) by private individuals, corporations, or other non-government entities.  | Commercial banks, private investment firms, family offices, privately held corporations, listed companies without majority state ownership |
 | Unknown | Ownership and control information cannot be reliably determined after reasonable research. This should be used sparingly and only when sufficient information is not publicly available. | Entities with limited disclosure or unverified ownership structures |
 
-For subsidiaries of public institutions, classify according to the ownership of the subsidiary itself, not the parent organisation, unless the parent’s control clearly determines operations. To find the relevant information for the above classification, we recommend following the below steps (in order): 
-1.Visit the official company website and check the “About”, “Governance”, or “Investor Relations” sections to see if you can find any ownership and shareholder information. 
-2.Visit reputable financial or business sources to search for information. For example: 
-a) Bloomberg. Google search “[institution name] Bloomberg” and select the company profile link. You will need a subscription to see all the company details, but a summary is still available. 
-b) Reuters. Google search “[institution name] Reuters” and select the Stock Price and Latest News link. Scroll down and you will see the “Company Information” section. 
+For subsidiaries of public institutions, classify according to the ownership of the subsidiary itself, not the parent organisation, unless the parent’s control clearly determines operations. To find the relevant information for the above classification, we recommend following the below steps (in order):  
+1. Visit the official company website and check the “About”, “Governance”, or “Investor Relations” sections to see if you can find any ownership and shareholder information.  
+2. Visit reputable financial or business sources to search for information. For example:  
+a) Bloomberg. Google search “[institution name] Bloomberg” and select the company profile link. You will need a subscription to see all the company details, but a summary is still available.  
+b) Reuters. Google search “[institution name] Reuters” and select the Stock Price and Latest News link. Scroll down and you will see the “Company Information” section.  
 c) Crunchbase. Google search “[institution name] Crunchbase” and select the Company Profile & Funding link. The header will have the industry of the institution. Scroll down company details.""", required=True),
             
-            FieldConfig('institution_type_layer2', 'Type Layer 2', 'select', category='main', detailed_help='Institution maps standardized institution names to their institution type (layer 1: public/private; layer 2: e.g., commercial FI, multilateral climate fund) and links each to a parent or subsidiary country. See [documentation](https://www.notion.so/cpi-all/institution_list_cpi-28fefb28632b804b8b96fb7ca466937e) for details. \nInstitution maps standardized institution names to their institution type (layer 1: public/private; layer 2: e.g., commercial FI, multilateral climate fund) and links each to a parent or subsidiary country. See [documentation](https://www.notion.so/cpi-all/institution_list_cpi-28fefb28632b804b8b96fb7ca466937e) for details. \nInstitution maps standardized institution names to their institution type (layer 1: public/private; layer 2: e.g., commercial FI, multilateral climate fund) and links each to a parent or subsidiary country. See [documentation](https://www.notion.so/cpi-all/institution_list_cpi-28fefb28632b804b8b96fb7ca466937e) for details.', required=True),
-            FieldConfig('institution_type_layer3', 'Type Layer 3', 'select', category='main', required=True),
+            FieldConfig('institution_type_layer2', 'Type Layer 2', 'select', category='main', detailed_help="""
+When in doubt, review the organisation’s core purpose, source of capital, and ownership structure. The aim here is to determine the institutions core function and financial role (i.e., is it producing goods/services, investing, lending, or managing funds?) and relate that to the below categories. 
+
+**Private Institutions**  
+| Layer 2 Category | Definition | Examples | Key Indicators |
+|------------------|------------|----------|----------------|
+| Corporations | Companies engaged in commercial, industrial, or service activities across any sector. May operate in multiple sectors (e.g., energy, water, manufacturing). | Energy utilities, construction firms, conglomerates | Incorporated companies, non-financial operations, sector-based activities |
+| Households/Individuals | Family-level economic actors, including high-net-worth individuals (HNWIs) and their intermediaries. | Private investors, family offices, trusts | Ownership by individuals or families, small-scale or personal investments |
+| Commercial Financial Institutions (FIs) | Providers of private finance and banking services, typically offering loans, credit, and investment banking services. | Commercial banks, investment banks | Licensed financial institutions, primarily profit-driven |
+| Institutional Investors | Entities investing large pools of capital on behalf of others. | Pension funds, insurance companies, asset managers | Long-term investment horizon, fiduciary role |
+| Funds | Pooled investment vehicles that raise and manage capital for investment purposes. | Incoming | Incoming |
+
+**Public Institutions**  
+| Layer 2 Category | Definition | Examples | Key Indicators |
+|------------------|------------|----------|----------------|
+| Multilateral DFIs | Multilateral financial institutions providing finance for development objectives. Owned by multiple countries and operating internationally. | World Bank, African Development Bank, ADB | Multiple government shareholders, global or regional mandate |
+| Bilateral DFIs | Bilateral financial institutions providing finance for development objectives. Owned by a single country, providing international development finance. | CDC Group (UK), Proparco (France) | Single government ownership, overseas development focus |
+| National DFIs | National financial institutions providing finance for development objectives. Owned by a single country, financing domestic development. | BNDES (Brazil), KfW (Germany) | Single government ownership, domestic development focus |
+| Governments and Their Agencies | Entities managing or disbursing public budgets. Includes central government bodies and agencies financing domestic activities. | Ministries, national departments, central banks, city councils, regional development agencies | National-level operations, Subnational jurisdiction |
+| National and Multilateral Climate Funds | Funds established by governments or international bodies to direct climate-related finance. | Green Climate Fund (multilateral), Indonesia Climate Change Trust Fund (national) | Climate finance focus, government or multilateral ownership | 
+| State-Owned Enterprises (SOEs) | Entities at least 50% government-owned, engaged in commercial, industrial, or service activities across any sector. | State-owned energy utilities | Incoming|
+| State-Owned Financial Institutions (SOFIs) | State-owned providers of finance and banking services, typically offering loans, credit, and investment banking services. | State-owned banks | Incoming |
+| Public Funds | Institutional investors or asset managers operating under public ownership. | Public pension funds, sovereign investment funds | Fund management under public control |
+
+To find the relevant information for the above classification, we recommend following the below steps (in order):  
+1. Visit the official company website and check the “About”, “Governance”, or “Investor Relations” sections to see if you can find any ownership and shareholder information. 
+
+2. Visit reputable financial or business sources to search for information. For example:  
+a) Bloomberg. Google search “[institution name] Bloomberg” and select the company profile link. You will need a subscription to see all the company details, but a summary is still available.  
+b) Reuters. Google search “[institution name] Reuters” and select the Stock Price and Latest News link. Scroll down and you will see the “Company Information” section.  
+c) Crunchbase. Google search “[institution name] Crunchbase” and select the Company Profile & Funding link. The header will have the industry of the institution. Scroll down company details.""", required=True),
+            
+            FieldConfig('institution_type_layer3', 'Type Layer 3', 'select', category='main', detailed_help="""
+To fill in Institution Type Layer 3:   
+1. Identify the Layer 2 category first (e.g., Funds or DFIs).  
+2. Select the correct Layer 3 sub-type based on ownership structure, scope of activity, or sector focus.  
+3. If no Layer 3 category applies, leave Layer 3 blank (not all Layer 2 categories have sub-types). 
+
+**Private Institutions**  
+| Layer 2 | Layer 3 | Definition/Description | Examples | Classification Notes |
+|---------|---------|------------------------|----------|----------------------|
+| Funds | Private Equity Funds | Investment funds that take ownership positions in private companies or conduct buyouts, often with a long-term and high-risk profile. | Blackstone, Carlyle Group, EQT | Invest primarily in unlisted companies; high return expectations. |
+| Venture Capital Funds | Funds that invest in early-stage or high-growth companies, often in technology or innovation sectors. | Sequoia Capital, Andreessen Horowitz | Early-stage, high-risk/high-growth investment strategy. |
+| Infrastructure Funds | Funds that invest in infrastructure assets such as energy, transport, or utilities. | Brookfield Infrastructure Partners, Macquarie Infrastructure Fund | Focused on long-term, stable returns from infrastructure projects. |
+
+**Public Institutions**  
+| Layer 2 | Layer 3 | Definition/Description | Examples | Classification Notes |
+|---------|---------|------------------------|----------|----------------------|
+| Development Finance Institutions (DFIs) | Multilateral and Regional DFIs | Institutions owned by multiple countries that finance international or regional development. | World Bank, African Development Bank (AfDB), Asian Development Bank (ADB) | Multilateral ownership (≥2 governments), cross-border operations. |
+| Development Finance Institutions (DFIs) | Bilateral DFIs | Institutions owned by a single country that provide development finance internationally. | British International Investment (BII/CDC), Proparco (France), DEG (Germany) | Single-country ownership; invests abroad for development impact. |
+| Development Finance Institutions (DFIs) | National DFIs | Publicly owned financial institutions providing development finance within their home country. | BNDES (Brazil), KfW (Germany), Development Bank of the Philippines | Domestic focus; national development objectives. |
+| Governments and Their Agencies | National | Central or federal government bodies that manage national budgets and implement policies. | Ministries of Finance, Central Banks, National Planning Agencies | Operate at the sovereign or federal level. |
+| Governments and Their Agencies | Subnational | Regional, state, or municipal governments and agencies financing projects within their jurisdiction. | State governments, city development agencies | Operate below national level; regional or local mandate. |
+| National and Multilateral Climate Funds | National Climate Funds | Funds established and owned by a single national government to manage and direct climate finance domestically. | Indonesia Climate Change Trust Fund, Rwanda Green Fund (FONERWA) | Nationally owned; climate-specific focus. |
+| National and Multilateral Climate Funds | Multilateral Climate Funds | Funds owned collectively by multiple governments to finance climate projects internationally, often managed by an international organisation. | Green Climate Fund (GCF), Climate Investment Funds (CIFs) | Multilateral ownership; global or regional climate finance mandate. |
+
+To find the relevant information for the above classification, we recommend following the below steps (in order):  
+1. Visit the official company website and check the “About”, “Governance”, or “Investor Relations” sections to see if you can find any ownership and shareholder information.  
+2. Visit reputable financial or business sources to search for information. For example:  
+a) Bloomberg. Google search “[institution name] Bloomberg” and select the company profile link. You will need a subscription to see all the company details, but a summary is still available.  
+b) Reuters. Google search “[institution name] Reuters” and select the Stock Price and Latest News link. Scroll down and you will see the “Company Information” section.  
+c) Crunchbase. Google search “[institution name] Crunchbase” and select the Company Profile & Funding link. The header will have the industry of the institution. Scroll down company details. 
+""", required=True),
             FieldConfig('country_sub', 'Subsidiary Country', 'select', category='main',
                        help_text='Subsidiary country where institution operates', required=True),
             FieldConfig('country_parent', 'Parent Country', 'select', category='main',
