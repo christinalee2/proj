@@ -953,8 +953,8 @@ def render_unified_single_entry_form(table_name: str):
                         st.session_state['lookup_used'] = False
                         st.rerun()
                         
-                    except Exception as e:
-                        st.error(f"Lookup failed: {str(e)}")
+                        except Exception as e:
+                            st.error(f"Lookup failed: {str(e)}")
     
    
 
