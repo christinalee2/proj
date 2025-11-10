@@ -946,12 +946,12 @@ def render_unified_single_entry_form(table_name: str):
                                 if 'country_parent' in existing_data.columns:
                                     valid_countries.update(existing_data['country_parent'].dropna().unique())
                         
-                        lookup_service = InstitutionLookupService(valid_countries=list(valid_countries))
-                        result = lookup_service.lookup_institution(primary_value)
-                        
-                        st.session_state['lookup_result'] = result
-                        st.session_state['lookup_used'] = False
-                        st.rerun()
+                            lookup_service = InstitutionLookupService(valid_countries=list(valid_countries))
+                            result = lookup_service.lookup_institution(primary_value)
+                            
+                            st.session_state['lookup_result'] = result
+                            st.session_state['lookup_used'] = False
+                            st.rerun()
                         
                         except Exception as e:
                             st.error(f"Lookup failed: {str(e)}")
