@@ -81,6 +81,8 @@ AUDIT_FIELDS = [
 ]
 
 
+
+
 #Can add any tables you want to these - this will add a new table to the dropdown list of choices 
 #General_description will show up right under when the user chooses their table (step 1)
 #Description shows up under the "Add New ___"
@@ -475,6 +477,147 @@ TABLE_ID_COLUMNS = {
     'hierarchy': 'id_hierarchy'
 }
 
+# This is for filtering the insittution dropdown menu so that if the user selects Public only Public layer type 2 shows up, etc.
+INSTITUTION_TYPE_HIERARCHY = {
+    'Public': {
+        'Government': [
+            'Central Government',
+            'Subnational Government', 
+            'Government Agencies'
+        ],
+        'State-owned Enterprise': [
+            'Corporate'
+        ],
+        'Bilateral DFI': [
+            'Bank'
+        ],
+        'Multilateral DFI': [
+            'Bank'
+        ],
+        'National DFI': [
+            'Bank'
+        ],
+        'Multilateral Climate Funds': [
+            'Public Fund'
+        ],
+        'State-owned FI': [
+            'Commercial Bank',
+            'Corporate & Investment Banks'
+        ],
+        'Export Credit Agency (ECA)': [
+            'Bank'
+        ],
+        'Public Fund': [
+            'Pension Fund'
+        ]
+    },
+    'Private': {
+        'Corporate': [
+            'Corporate'
+        ],
+        'Commercial FI': [
+            'Commercial Bank',
+            'Corporate & Investment Banks',
+            'Asset Manager',
+            'Insurance Company'
+        ],
+        'Funds': [
+            'Private Equity Funds',
+            'Venture Capital Funds',
+            'Infrastructure Funds'
+        ],
+        'Institutional Investors': [
+            'Pension Fund',
+            'Asset Manager',
+            'Insurance Company'
+        ],
+        'Household/Individual': [],
+        'Third Sector Organisation': []
+    }
+}
+
+# Fallback options for when no specific mapping exists
+DEFAULT_TYPE2_OPTIONS = [
+    '', 'Funds', 'Corporation', 'Commercial FI', 'Government', 
+    'Institutional Investors', 'Bilateral DFI', 'SOE', 
+    'Multilateral Climate Funds', 'Multilateral DFI', 
+    'Export Credit Agency (ECA)', 'State-owned FI', 
+    'National DFI', 'Household/Individual', 'Public Fund', 
+    'Third Sector Organisation'
+]
+
+DEFAULT_TYPE3_OPTIONS = [
+    '', 'Corporate', 'Venture Capital Funds', 'Commercial Bank', 
+    'Infrastructure Funds', 'Subnational Government', 'Pension Fund', 
+    'Private Equity Funds', 'Corporate & Investment Banks', 
+    'Central Government', 'Asset Manager', 'Insurance Company', 
+    'Government Agencies', 'Bank'
+]
+
+def get_filtered_type2_options(type1_value: Optional[str], existing_values: Optional[List[str]] = None) -> List[str]:
+    """Get filtered type2 options based on type1 selection"""
+    if not type1_value or type1_value == '':
+        base_options = DEFAULT_TYPE2_OPTIONS.copy()
+    else:
+        type2_mapping = INSTITUTION_TYPE_HIERARCHY.get(type1_value, {})
+        if type2_mapping:
+            base_options = [''] + list(type2_mapping.keys())
+        else:
+            base_options = DEFAULT_TYPE2_OPTIONS.copy()
+    
+    if existing_values:
+        all_options = set(base_options[1:])
+        all_options.update(existing_values)
+        base_options = [''] + sorted(list(all_options))
+    
+    return base_options
+
+def get_filtered_type3_options(type1_value: Optional[str], type2_value: Optional[str], 
+                               existing_values: Optional[List[str]] = None) -> List[str]:
+    """Get filtered type3 options based on type1 and type2 selections"""
+    if not type1_value or type1_value == '' or not type2_value or type2_value == '':
+        base_options = DEFAULT_TYPE3_OPTIONS.copy()
+    else:
+        type2_mapping = INSTITUTION_TYPE_HIERARCHY.get(type1_value, {})
+        if type2_mapping and type2_value in type2_mapping:
+            type3_options = type2_mapping[type2_value]
+            base_options = [''] + type3_options
+        else:
+            base_options = DEFAULT_TYPE3_OPTIONS.copy()
+    
+    if existing_values:
+        all_options = set(base_options[1:])
+        all_options.update(existing_values)
+        base_options = [''] + sorted(list(all_options))
+    
+    return base_options
+
+def validate_type_hierarchy(type1: Optional[str], type2: Optional[str], type3: Optional[str]) -> Dict[str, Any]:
+    """Validate that the selected type hierarchy is consistent"""
+    result = {
+        'valid': True,
+        'warnings': [],
+        'suggestions': []
+    }
+    
+    # Check if type2 is valid for type1
+    if type1 and type2:
+        valid_type2_options = get_filtered_type2_options(type1)
+        if type2 not in valid_type2_options:
+            result['valid'] = False
+            result['warnings'].append(f"'{type2}' is not typically associated with '{type1}' institutions")
+            result['suggestions'].append(f"Consider: {', '.join(valid_type2_options[1:3])}")
+    
+    # Check if type3 is valid for type1/type2 combination
+    if type1 and type2 and type3:
+        valid_type3_options = get_filtered_type3_options(type1, type2)
+        if type3 not in valid_type3_options:
+            result['valid'] = False
+            result['warnings'].append(f"'{type3}' is not typically associated with '{type1}' -> '{type2}' institutions")
+            if len(valid_type3_options) > 1:
+                result['suggestions'].append(f"Consider: {', '.join(valid_type3_options[1:3])}")
+    
+    return result
 def get_table_id_column(table_name: str) -> Optional[str]:
     return TABLE_ID_COLUMNS.get(table_name)
 
