@@ -87,7 +87,7 @@ AUDIT_FIELDS = [
 #General_description will show up right under when the user chooses their table (step 1)
 #Description shows up under the "Add New ___"
 #Help_text is for fields that don't require a lot of extra help (just a little ?)
-#Detailed_help is for fields that need a lot of documentation (expandable +), generally have one or the other 
+#Detailed_help is for fields that need a lot of documentation (expandable toggle), can insert tables in markdown, generally have one or the other 
 TABLE_CONFIGS = {
     'institution': TableConfig(
         table_name='institution',
