@@ -93,7 +93,7 @@ TABLE_CONFIGS = {
         table_name='institution',
         display_name='Institution',
         has_standardization=True,
-        description="First, check to see if the original institution name currently exists in the reference table. If there is an 'institution already exists' message, you do not need to update this institution. If there is an",
+        description="First, check to see if the original institution name currently exists in the reference table. If there is an 'institution already exists' message, you do not need to update this institution. If the original institution name does not currently exist in the Institution (Standardized Name) reference table, you will either need to map the original institution name to an existing standardized name or enter a new standardized name if no existing option is suitable. ",
         general_description="""Institution is a two-piece reference table that operates using two datasets:
         
 Institution (Classifications): Classifies standardised institution names across:  
