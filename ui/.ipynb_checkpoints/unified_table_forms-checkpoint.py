@@ -1024,129 +1024,95 @@ def render_unified_single_entry_form(table_name: str):
     # st.markdown("---")
     # st.subheader(f"{config.display_name} Details")
     
-    # Create the main form
-    with st.form(key=f"{table_name}_entry_form", clear_on_submit=False):
-        form_data = {}
-        if primary_field_config:
-            form_data[primary_field] = primary_value
-        
-        remaining_fields = [f for f in config.fields if f.name != primary_field]
-        required_fields = [f for f in remaining_fields if f.required and getattr(f, 'category', 'main') == 'main']
-        optional_main_fields = [f for f in remaining_fields if not f.required and getattr(f, 'category', 'main') == 'main']
-        advanced_fields = [f for f in remaining_fields if getattr(f, 'category', 'main') == 'advanced']
-        
-        if required_fields:
-            cols = st.columns(2)
-            for i, field_config in enumerate(required_fields):
-                with cols[i % 2]:
-                    help_key = f"help_{field_config.name}_req_{i}"
-                
-                    field_col, toggle_col = st.columns([0.8, 0.2])
-
-                    with field_col:
-                        form_data[field_config.name] = render_form_field(
-                            field_config,
-                            dropdown_options,
-                            f"{table_name}_req_{i}",
-                            existing_data
-                        )
-                    
-                    with toggle_col:
-                        if getattr(field_config, "detailed_help", None):
-                            # Small expander in the toggle column
-                            with st.expander("?", expanded=False):
-                                st.markdown(field_config.detailed_help)
-                    
-                #     with field_col:
-                #         form_data[field_config.name] = render_form_field(
-                #             field_config,
-                #             dropdown_options,
-                #             f"{table_name}_req_{i}",
-                #             existing_data
-                #         )
-                    
-                #     with toggle_col:
-                #         if getattr(field_config, "detailed_help", None):
-                #             show_help = st.checkbox(
-                #                 "Help",
-                #                 key=help_key,
-                #                 label_visibility="collapsed"
-                #             )
-                #         else:
-                #             show_help = False
-        
-                #     # if getattr(field_config, "detailed_help", None) and show_help:
-                #     #     st.markdown(field_config.detailed_help)
-                #     #     # st.info(field_config.detailed_help)
-
-                # for i, field_config in enumerate(required_fields):
-                #     if getattr(field_config, "detailed_help", None):
-                #         help_key = f"help_{field_config.name}_req_{i}"
-                #         if st.session_state.get(help_key, False):
-                #             st.markdown(field_config.detailed_help)
-                                
-                   
-        
-        if optional_main_fields:
-            st.subheader("Secondary Fields")
-            cols = st.columns(2)
-            for i, field_config in enumerate(optional_main_fields):
-                with cols[i % 2]:
-                    field_col, help_col = st.columns([0.9, 0.1])
-                    
-                    with field_col:
-                        form_data[field_config.name] = render_form_field(field_config, dropdown_options, f"{table_name}_opt_{i}", existing_data)
-                    
-                    with help_col:
-                        if hasattr(field_config, 'detailed_help') and field_config.detailed_help:
-                            with st.expander("+", expanded=False):
-                                st.markdown(field_config.detailed_help)
-                # with cols[i % 2]:
-                #     form_data[field_config.name] = render_form_field(field_config, dropdown_options, f"{table_name}_opt_{i}", existing_data)
-        
-        if advanced_fields:
-            with st.expander("Additional Information"):
-                cols = st.columns(2)
-                for i, field_config in enumerate(advanced_fields):
-                    with cols[i % 2]:
-                        form_data[field_config.name] = render_form_field(field_config, dropdown_options, f"{table_name}_adv_{i}", existing_data)
-
-        # Real-time compound duplicate checking for tables with multiple duplicate check fields
-        # Note: This is now inside the form but still works for validation
-        compound_duplicate_error = None
-        if config.duplicate_check_fields and len(config.duplicate_check_fields) > 1:
-            # Check if we have values for multiple duplicate check fields
-            compound_check_values = {}
-            for field_name in config.duplicate_check_fields:
-                value = form_data.get(field_name)
-                if value is not None and str(value).strip():
-                    compound_check_values[field_name] = value
+    form_data = {}
+    if primary_field_config:
+        form_data[primary_field] = primary_value
+    
+    remaining_fields = [f for f in config.fields if f.name != primary_field]
+    required_fields = [f for f in remaining_fields if f.required and getattr(f, 'category', 'main') == 'main']
+    optional_main_fields = [f for f in remaining_fields if not f.required and getattr(f, 'category', 'main') == 'main']
+    advanced_fields = [f for f in remaining_fields if getattr(f, 'category', 'main') == 'advanced']
+    
+    if required_fields:
+        cols = st.columns(2)
+        for i, field_config in enumerate(required_fields):
+            with cols[i % 2]:
+                help_key = f"help_{field_config.name}_req_{i}"
             
-            # Only check if we have at least 2 values filled out
-            if len(compound_check_values) >= 2:
-                compound_duplicate = check_compound_duplicate(form_data, existing_data, config.duplicate_check_fields)
-                if compound_duplicate:
-                    compound_duplicate_error = f"Duplicate entry found: {compound_duplicate}"
-                    st.error(compound_duplicate_error)
-                    st.caption("This exact combination of values already exists in the database.")
-
-
+                field_col, toggle_col = st.columns([0.8, 0.2])
                 
-        # Form submit button
-        st.markdown("---")
-        
-        # Create two columns for submit button layout
-        col1, col3 = st.columns([2, 1])
-        
-        with col1:
-            form_submitted = st.form_submit_button(f"Add {config.display_name}", type="primary", use_container_width=True)
+                with field_col:
+                    form_data[field_config.name] = render_form_field(
+                        field_config,
+                        dropdown_options,
+                        f"{table_name}_req_{i}",
+                        existing_data
+                    )
+                
+                with toggle_col:
+                    if getattr(field_config, "detailed_help", None):
+                        show_help = st.toggle(
+                            "Help",
+                            key=help_key,
+                            label_visibility="collapsed"
+                        )
+                    else:
+                        show_help = False
+    
+                if getattr(field_config, "detailed_help", None) and show_help:
+                    st.markdown(field_config.detailed_help)
+                    # st.info(field_config.detailed_help)
+                            
+               
+    
+    if optional_main_fields:
+        st.subheader("Secondary Fields")
+        cols = st.columns(2)
+        for i, field_config in enumerate(optional_main_fields):
+            with cols[i % 2]:
+                field_col, help_col = st.columns([0.9, 0.1])
+                
+                with field_col:
+                    form_data[field_config.name] = render_form_field(field_config, dropdown_options, f"{table_name}_opt_{i}", existing_data)
+                
+                with help_col:
+                    if hasattr(field_config, 'detailed_help') and field_config.detailed_help:
+                        with st.expander("+", expanded=False):
+                            st.markdown(field_config.detailed_help)
+            # with cols[i % 2]:
+            #     form_data[field_config.name] = render_form_field(field_config, dropdown_options, f"{table_name}_opt_{i}", existing_data)
+    
+    if advanced_fields:
+        with st.expander("Additional Information"):
+            cols = st.columns(2)
+            for i, field_config in enumerate(advanced_fields):
+                with cols[i % 2]:
+                    form_data[field_config.name] = render_form_field(field_config, dropdown_options, f"{table_name}_adv_{i}", existing_data)
 
-        # Add hierarchy form for new institutions (outside the main form)
+
+
+    # Real-time compound duplicate checking for tables with multiple duplicate check fields
+    if config.duplicate_check_fields and len(config.duplicate_check_fields) > 1:
+        # Check if we have values for multiple duplicate check fields
+        compound_check_values = {}
+        for field_name in config.duplicate_check_fields:
+            value = form_data.get(field_name)
+            if value is not None and str(value).strip():
+                compound_check_values[field_name] = value
+        
+        # Only check if we have at least 2 values filled out
+        if len(compound_check_values) >= 2:
+            compound_duplicate = check_compound_duplicate(form_data, existing_data, config.duplicate_check_fields)
+            if compound_duplicate:
+                st.error(f"Duplicate entry found: {compound_duplicate}")
+                st.caption("This exact combination of values already exists in the database.")
+    
+    
+
+    
+    # Add hierarchy form for new institutions
+    hierarchy_form_data = None
     if table_name == 'institution':
-        # Clear any previous hierarchy form data when primary value changes
-        if primary_value != st.session_state.get('last_hierarchy_primary_value'):
-            st.session_state.pop('current_hierarchy_form_data', None)
-            st.session_state['last_hierarchy_primary_value'] = primary_value
 
         new_inst_expander_key = f"new_hierarchy_expander_opened_{primary_value}"
     
@@ -1208,9 +1174,8 @@ def render_unified_single_entry_form(table_name: str):
                         key="new_rel_type"
                     )
                     
-                    # Store hierarchy data in session state for form submission
                     if child_name and child_id:
-                        st.session_state['current_hierarchy_form_data'] = {
+                        hierarchy_form_data = {
                             'parent_institution': primary_value,
                             'child_institution': child_name,
                             'child_id': child_id,
@@ -1219,9 +1184,6 @@ def render_unified_single_entry_form(table_name: str):
                             'relationship_type': relationship_type_text,
                             'mode': 'new_as_parent'
                         }
-                        st.info(f"Hierarchy relationship configured: {primary_value} → {child_name}")
-                    else:
-                        st.session_state.pop('current_hierarchy_form_data', None)
                 
                 else:  # As Child Institution
                     st.write(f"**{primary_value}** will be the CHILD institution")
@@ -1259,9 +1221,8 @@ def render_unified_single_entry_form(table_name: str):
                         key="new_child_rel_type"
                     )
                     
-                    # Store hierarchy data in session state for form submission
                     if parent_name and parent_id:
-                        st.session_state['current_hierarchy_form_data'] = {
+                        hierarchy_form_data = {
                             'parent_institution': parent_name,
                             'parent_id': parent_id,
                             'child_institution': primary_value,
@@ -1270,36 +1231,24 @@ def render_unified_single_entry_form(table_name: str):
                             'relationship_type': relationship_type_text,
                             'mode': 'new_as_child'
                         }
-                        st.info(f"Hierarchy relationship configured: {parent_name} → {primary_value}")
-                    else:
-                        st.session_state.pop('current_hierarchy_form_data', None)
-            else:
-                # No relationship selected, clear any stored data
-                st.session_state.pop('current_hierarchy_form_data', None)
-        
-        # Handle form submission
-        if form_submitted:
-            # Check for validation errors
+
+    st.markdown("---")
+
+    
+    # col1, col2, col3 = st.columns([2, 1, 1])
+    col1, col3 = st.columns([2, 1])
+    
+    with col1:
+        if st.button(f"Add {config.display_name}", type="primary", use_container_width=True):
             missing_required = []
             for field_name in config.required_fields:
                 if not form_data.get(field_name) or str(form_data[field_name]).strip() == '':
                     field_display = next((f.display_name for f in config.fields if f.name == field_name), field_name)
                     missing_required.append(field_display)
             
-            # Don't proceed if there are validation errors
             if missing_required:
                 st.error(f"Please fill in required fields: {', '.join(missing_required)}")
-            elif compound_duplicate_error:
-                # Already displayed above, just don't proceed
-                pass
             else:
-                # Get hierarchy data if it exists (for institution table)
-                hierarchy_form_data = None
-                if table_name == 'institution':
-                    # Check if hierarchy form data was set outside the form
-                    hierarchy_form_data = st.session_state.get('current_hierarchy_form_data')
-                
-                # Process the submission
                 with st.spinner(f"Creating {config.display_name.lower()}..."):
                     result = create_table_entry(
                         table_name,
@@ -1308,9 +1257,11 @@ def render_unified_single_entry_form(table_name: str):
                     )
                     
                     if result['success']:
+                    
+
                         st.success(f"{config.display_name} created successfully!")
-        
-                        # Handle hierarchy creation for institutions
+
+    
                         if table_name == 'institution' and hierarchy_form_data:
                             with st.spinner("Creating hierarchy relationship..."):
                                 time.sleep(1)  # Brief delay to ensure institution is in database
@@ -1361,7 +1312,7 @@ def render_unified_single_entry_form(table_name: str):
                                     else:
                                         st.error(f"Hierarchy creation failed: {hierarchy_result['message']}")
                                         
-                        # Clean up session state
+                        
                         st.session_state[f'_cache_needs_clear'] = True
                         
                         if table_name == 'institution':
@@ -1372,13 +1323,11 @@ def render_unified_single_entry_form(table_name: str):
                             # Clear hierarchy form keys
                             for key in ['new_relationship_choice', 'new_ownership', 'new_controlling', 'new_rel_type', 'new_child_ownership', 'new_child_controlling', 'new_child_rel_type']:
                                 st.session_state.pop(key, None)
-                            # Clear current hierarchy form data
-                            st.session_state.pop('current_hierarchy_form_data', None)
+                        
+
                     else:
                         st.error(result['message'])
-
     
-   
     
    
 
