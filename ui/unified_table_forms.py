@@ -1042,7 +1042,7 @@ def render_unified_single_entry_form(table_name: str):
                     help_key = f"help_{field_config.name}_req_{i}"
                 
                     field_col, toggle_col = st.columns([0.8, 0.2])
-                    
+
                     with field_col:
                         form_data[field_config.name] = render_form_field(
                             field_config,
@@ -1053,23 +1053,37 @@ def render_unified_single_entry_form(table_name: str):
                     
                     with toggle_col:
                         if getattr(field_config, "detailed_help", None):
-                            show_help = st.checkbox(
-                                "Help",
-                                key=help_key,
-                                label_visibility="collapsed"
-                            )
-                        else:
-                            show_help = False
+                            # Small expander in the toggle column
+                            with st.expander("?", expanded=False):
+                                st.markdown(field_config.detailed_help)
+                    
+                #     with field_col:
+                #         form_data[field_config.name] = render_form_field(
+                #             field_config,
+                #             dropdown_options,
+                #             f"{table_name}_req_{i}",
+                #             existing_data
+                #         )
+                    
+                #     with toggle_col:
+                #         if getattr(field_config, "detailed_help", None):
+                #             show_help = st.checkbox(
+                #                 "Help",
+                #                 key=help_key,
+                #                 label_visibility="collapsed"
+                #             )
+                #         else:
+                #             show_help = False
         
-                    # if getattr(field_config, "detailed_help", None) and show_help:
-                    #     st.markdown(field_config.detailed_help)
-                    #     # st.info(field_config.detailed_help)
+                #     # if getattr(field_config, "detailed_help", None) and show_help:
+                #     #     st.markdown(field_config.detailed_help)
+                #     #     # st.info(field_config.detailed_help)
 
-                for i, field_config in enumerate(required_fields):
-                    if getattr(field_config, "detailed_help", None):
-                        help_key = f"help_{field_config.name}_req_{i}"
-                        if st.session_state.get(help_key, False):
-                            st.markdown(field_config.detailed_help)
+                # for i, field_config in enumerate(required_fields):
+                #     if getattr(field_config, "detailed_help", None):
+                #         help_key = f"help_{field_config.name}_req_{i}"
+                #         if st.session_state.get(help_key, False):
+                #             st.markdown(field_config.detailed_help)
                                 
                    
         
