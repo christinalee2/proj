@@ -359,8 +359,11 @@ class HierarchyService:
             return result
         
         is_controlling = percent_ownership > 0.5
+
+        next_hierarchy_id = self.get_next_hierarchy_id()
         
         hierarchy_data = {
+            'id_hierarchy': next_hierarchy_id, 
             'id_parent': int(parent_id),
             'parent_institution': parent_name,
             'id_child': int(child_id),

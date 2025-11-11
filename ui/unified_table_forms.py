@@ -1053,7 +1053,7 @@ def render_unified_single_entry_form(table_name: str):
                     
                     with toggle_col:
                         if getattr(field_config, "detailed_help", None):
-                            show_help = st.toggle(
+                            show_help = st.checkbox(
                                 "Help",
                                 key=help_key,
                                 label_visibility="collapsed"
@@ -1110,119 +1110,8 @@ def render_unified_single_entry_form(table_name: str):
                     st.error(compound_duplicate_error)
                     st.caption("This exact combination of values already exists in the database.")
 
-        # Form submit button
-        st.markdown("---")
-        
-        # Create two columns for submit button layout
-        col1, col3 = st.columns([2, 1])
-        
-        with col1:
-            form_submitted = st.form_submit_button(f"Add {config.display_name}", type="primary", use_container_width=True)
-        
-        # Handle form submission
-        if form_submitted:
-            # Check for validation errors
-            missing_required = []
-            for field_name in config.required_fields:
-                if not form_data.get(field_name) or str(form_data[field_name]).strip() == '':
-                    field_display = next((f.display_name for f in config.fields if f.name == field_name), field_name)
-                    missing_required.append(field_display)
-            
-            # Don't proceed if there are validation errors
-            if missing_required:
-                st.error(f"Please fill in required fields: {', '.join(missing_required)}")
-            elif compound_duplicate_error:
-                # Already displayed above, just don't proceed
-                pass
-            else:
-                # Get hierarchy data if it exists (for institution table)
-                hierarchy_form_data = None
-                if table_name == 'institution':
-                    # Check if hierarchy form data was set outside the form
-                    hierarchy_form_data = st.session_state.get('current_hierarchy_form_data')
-                
-                # Process the submission
-                with st.spinner(f"Creating {config.display_name.lower()}..."):
-                    result = create_table_entry(
-                        table_name,
-                        form_data,
-                        user=st.session_state.get('username', 'analyst')
-                    )
-                    
-                    if result['success']:
-                        st.success(f"{config.display_name} created successfully!")
-        
-                        # Handle hierarchy creation for institutions
-                        if table_name == 'institution' and hierarchy_form_data:
-                            with st.spinner("Creating hierarchy relationship..."):
-                                time.sleep(1)  # Brief delay to ensure institution is in database
 
-                                if 'new_id' in result:
-                                    new_institution_id = result['new_id']
-                                else:
-                                    # Calculate what the new ID would be so we don't have to reload/cache institutions
-                                    try:   
-                                        max_id_query = "SELECT MAX(id_institution_cpi) as max_id FROM institution"
-                                        max_id_result = QueryService().execute_query(max_id_query)
-                                        if not max_id_result.empty and max_id_result.iloc[0]['max_id'] is not None:
-                                            new_institution_id = int(max_id_result.iloc[0]['max_id'])
-                                        else:
-                                            new_institution_id = 1  # First institution
-                                    except:
-                                        st.error("Could not determine new institution ID")
-                                        new_institution_id = None
-                                
-                                if new_institution_id:
-                                    hierarchy_service = HierarchyService()
-
-                                    if hierarchy_form_data['mode'] == 'new_as_parent':
-                                        # New institution is parent, use existing child from search
-                                        hierarchy_result = hierarchy_service.create_hierarchy_entry_direct(
-                                            parent_id=new_institution_id,
-                                            parent_name=form_data[primary_field],  # User's input
-                                            child_id=hierarchy_form_data['child_id'],
-                                            child_name=hierarchy_form_data['child_institution'],
-                                            percent_ownership=hierarchy_form_data.get('percent_ownership'),
-                                            relationship_type=hierarchy_form_data.get('relationship_type'),
-                                            user=st.session_state.get('username', 'analyst')
-                                        )
-                                    elif hierarchy_form_data['mode'] == 'new_as_child':
-                                        # New institution is child, use existing parent from search
-                                        hierarchy_result = hierarchy_service.create_hierarchy_entry_direct(
-                                            parent_id=hierarchy_form_data['parent_id'],
-                                            parent_name=hierarchy_form_data['parent_institution'],
-                                            child_id=new_institution_id,
-                                            child_name=form_data[primary_field],  # User's input
-                                            percent_ownership=hierarchy_form_data.get('percent_ownership'),
-                                            relationship_type=hierarchy_form_data.get('relationship_type'),
-                                            user=st.session_state.get('username', 'analyst')
-                                        )
-                                    
-                                    if hierarchy_result['success']:
-                                        st.success("Hierarchy relationship created successfully!")
-                                    else:
-                                        st.error(f"Hierarchy creation failed: {hierarchy_result['message']}")
-                                        
-                        # Clean up session state
-                        st.session_state[f'_cache_needs_clear'] = True
-                        
-                        if table_name == 'institution':
-                            st.session_state.pop('lookup_result', None)
-                            st.session_state.pop('lookup_used', None)
-                            for key in ['prefill_type1', 'prefill_type2', 'prefill_type3', 'prefill_parent', 'prefill_sub']:
-                                st.session_state.pop(key, None)
-                            # Clear hierarchy form keys
-                            for key in ['new_relationship_choice', 'new_ownership', 'new_controlling', 'new_rel_type', 'new_child_ownership', 'new_child_controlling', 'new_child_rel_type']:
-                                st.session_state.pop(key, None)
-                            # Clear current hierarchy form data
-                            st.session_state.pop('current_hierarchy_form_data', None)
-                    else:
-                        st.error(result['message'])
-    
-    
-
-    
-    # Add hierarchy form for new institutions (outside the main form)
+        # Add hierarchy form for new institutions (outside the main form)
     if table_name == 'institution':
         # Clear any previous hierarchy form data when primary value changes
         if primary_value != st.session_state.get('last_hierarchy_primary_value'):
@@ -1357,6 +1246,116 @@ def render_unified_single_entry_form(table_name: str):
             else:
                 # No relationship selected, clear any stored data
                 st.session_state.pop('current_hierarchy_form_data', None)
+                
+        # Form submit button
+        st.markdown("---")
+        
+        # Create two columns for submit button layout
+        col1, col3 = st.columns([2, 1])
+        
+        with col1:
+            form_submitted = st.form_submit_button(f"Add {config.display_name}", type="primary", use_container_width=True)
+        
+        # Handle form submission
+        if form_submitted:
+            # Check for validation errors
+            missing_required = []
+            for field_name in config.required_fields:
+                if not form_data.get(field_name) or str(form_data[field_name]).strip() == '':
+                    field_display = next((f.display_name for f in config.fields if f.name == field_name), field_name)
+                    missing_required.append(field_display)
+            
+            # Don't proceed if there are validation errors
+            if missing_required:
+                st.error(f"Please fill in required fields: {', '.join(missing_required)}")
+            elif compound_duplicate_error:
+                # Already displayed above, just don't proceed
+                pass
+            else:
+                # Get hierarchy data if it exists (for institution table)
+                hierarchy_form_data = None
+                if table_name == 'institution':
+                    # Check if hierarchy form data was set outside the form
+                    hierarchy_form_data = st.session_state.get('current_hierarchy_form_data')
+                
+                # Process the submission
+                with st.spinner(f"Creating {config.display_name.lower()}..."):
+                    result = create_table_entry(
+                        table_name,
+                        form_data,
+                        user=st.session_state.get('username', 'analyst')
+                    )
+                    
+                    if result['success']:
+                        st.success(f"{config.display_name} created successfully!")
+        
+                        # Handle hierarchy creation for institutions
+                        if table_name == 'institution' and hierarchy_form_data:
+                            with st.spinner("Creating hierarchy relationship..."):
+                                time.sleep(1)  # Brief delay to ensure institution is in database
+
+                                if 'new_id' in result:
+                                    new_institution_id = result['new_id']
+                                else:
+                                    # Calculate what the new ID would be so we don't have to reload/cache insittutions
+                                    try:   
+                                        max_id_query = "SELECT MAX(id_institution_cpi) as max_id FROM institution"
+                                        max_id_result = QueryService().execute_query(max_id_query)
+                                        if not max_id_result.empty and max_id_result.iloc[0]['max_id'] is not None:
+                                            new_institution_id = int(max_id_result.iloc[0]['max_id'])
+                                        else:
+                                            new_institution_id = 1  # First institution
+                                    except:
+                                        st.error("Could not determine new institution ID")
+                                        new_institution_id = None
+                                
+                                if new_institution_id:
+                                    hierarchy_service = HierarchyService()
+
+                                    if hierarchy_form_data['mode'] == 'new_as_parent':
+                                        # New institution is parent, use existing child from search
+                                        hierarchy_result = hierarchy_service.create_hierarchy_entry_direct(
+                                            parent_id=new_institution_id,
+                                            parent_name=form_data[primary_field],  # User's input
+                                            child_id=hierarchy_form_data['child_id'],
+                                            child_name=hierarchy_form_data['child_institution'],
+                                            percent_ownership=hierarchy_form_data.get('percent_ownership'),
+                                            relationship_type=hierarchy_form_data.get('relationship_type'),
+                                            user=st.session_state.get('username', 'analyst')
+                                        )
+                                    elif hierarchy_form_data['mode'] == 'new_as_child':
+                                        # New institution is child, use existing parent from search
+                                        hierarchy_result = hierarchy_service.create_hierarchy_entry_direct(
+                                            parent_id=hierarchy_form_data['parent_id'],
+                                            parent_name=hierarchy_form_data['parent_institution'],
+                                            child_id=new_institution_id,
+                                            child_name=form_data[primary_field],  # User's input
+                                            percent_ownership=hierarchy_form_data.get('percent_ownership'),
+                                            relationship_type=hierarchy_form_data.get('relationship_type'),
+                                            user=st.session_state.get('username', 'analyst')
+                                        )
+                                    
+                                    if hierarchy_result['success']:
+                                        st.success("Hierarchy relationship created successfully!")
+                                    else:
+                                        st.error(f"Hierarchy creation failed: {hierarchy_result['message']}")
+                                        
+                        # Clean up session state
+                        st.session_state[f'_cache_needs_clear'] = True
+                        
+                        if table_name == 'institution':
+                            st.session_state.pop('lookup_result', None)
+                            st.session_state.pop('lookup_used', None)
+                            for key in ['prefill_type1', 'prefill_type2', 'prefill_type3', 'prefill_parent', 'prefill_sub']:
+                                st.session_state.pop(key, None)
+                            # Clear hierarchy form keys
+                            for key in ['new_relationship_choice', 'new_ownership', 'new_controlling', 'new_rel_type', 'new_child_ownership', 'new_child_controlling', 'new_child_rel_type']:
+                                st.session_state.pop(key, None)
+                            # Clear current hierarchy form data
+                            st.session_state.pop('current_hierarchy_form_data', None)
+                    else:
+                        st.error(result['message'])
+
     
    
     
