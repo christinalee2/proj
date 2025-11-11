@@ -1061,9 +1061,15 @@ def render_unified_single_entry_form(table_name: str):
                         else:
                             show_help = False
         
-                    if getattr(field_config, "detailed_help", None) and show_help:
-                        st.markdown(field_config.detailed_help)
-                        # st.info(field_config.detailed_help)
+                    # if getattr(field_config, "detailed_help", None) and show_help:
+                    #     st.markdown(field_config.detailed_help)
+                    #     # st.info(field_config.detailed_help)
+
+                for i, field_config in enumerate(required_fields):
+                    if getattr(field_config, "detailed_help", None):
+                        help_key = f"help_{field_config.name}_req_{i}"
+                        if st.session_state.get(help_key, False):
+                            st.markdown(field_config.detailed_help)
                                 
                    
         
@@ -1110,6 +1116,16 @@ def render_unified_single_entry_form(table_name: str):
                     st.error(compound_duplicate_error)
                     st.caption("This exact combination of values already exists in the database.")
 
+
+                
+        # Form submit button
+        st.markdown("---")
+        
+        # Create two columns for submit button layout
+        col1, col3 = st.columns([2, 1])
+        
+        with col1:
+            form_submitted = st.form_submit_button(f"Add {config.display_name}", type="primary", use_container_width=True)
 
         # Add hierarchy form for new institutions (outside the main form)
     if table_name == 'institution':
@@ -1246,15 +1262,6 @@ def render_unified_single_entry_form(table_name: str):
             else:
                 # No relationship selected, clear any stored data
                 st.session_state.pop('current_hierarchy_form_data', None)
-                
-        # Form submit button
-        st.markdown("---")
-        
-        # Create two columns for submit button layout
-        col1, col3 = st.columns([2, 1])
-        
-        with col1:
-            form_submitted = st.form_submit_button(f"Add {config.display_name}", type="primary", use_container_width=True)
         
         # Handle form submission
         if form_submitted:
