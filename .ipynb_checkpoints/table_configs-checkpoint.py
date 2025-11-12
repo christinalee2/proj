@@ -168,22 +168,44 @@ To fill in Institution Type Layer 3:
 3. If no Layer 3 category applies, leave Layer 3 blank (not all Layer 2 categories have sub-types). 
 
 **Private Institutions**  
-| Layer 2 | Layer 3 | Definition/Description | Examples | Classification Notes |
-|---------|---------|------------------------|----------|----------------------|
-| Funds | Private Equity Funds | Investment funds that take ownership positions in private companies or conduct buyouts, often with a long-term and high-risk profile. | Blackstone, Carlyle Group, EQT | Invest primarily in unlisted companies; high return expectations. |
-| Venture Capital Funds | Funds that invest in early-stage or high-growth companies, often in technology or innovation sectors. | Sequoia Capital, Andreessen Horowitz | Early-stage, high-risk/high-growth investment strategy. |
-| Infrastructure Funds | Funds that invest in infrastructure assets such as energy, transport, or utilities. | Brookfield Infrastructure Partners, Macquarie Infrastructure Fund | Focused on long-term, stable returns from infrastructure projects. |
+| Layer 1 | Layer 2 | Layer 3 | Definition | Examples | Key Indicators |
+|---------|---------|---------|------------|----------|----------------|
+| Private | Corporations | Energy Utilities | Companies generating, transmitting, or distributing electricity, gas, or other energy sources. | Shell, Enel, NextEra Energy | Operate in energy sector, regulated utility activity, infrastructure ownership |
+| Private | Corporations | Transport | Companies providing transportation or logistics infrastructure or services. | Delta Air Lines, Maersk, Siemens Mobility | Operate fleets, ports, airlines, logistics networks |
+| Private | Corporations | Buildings and Infrastructure | Firms developing, owning, or operating buildings, construction, and civil infrastructure. | Skanska, Vinci, Brookfield Infrastructure | Construction, property development, real-estate holdings |
+| Private | Corporations | Materials | Producers or processors of raw or intermediate industrial materials. | ArcelorMittal, BASF, Holcim | Commodity or industrial material production, manufacturing inputs |
+| Private | Corporations | Consumer Goods | Companies producing or selling goods and services for consumers. | Nestlé, Unilever, Toyota | Retail or consumer-facing sector, brand manufacturing |
+| Private | Households | Households | Individual or family economic actors, including high-net-worth individuals investing personal assets. | Family offices, private investors | Ownership by individuals/families, non-institutional scale |
+| Private | Banks | Commercial Bank | Deposit-taking institutions offering retail and corporate banking products. | JPMorgan Chase, Barclays, ICBC | Licensed deposit institution, lending and payment services |
+| Private | Banks | Investment Bank | Banks specializing in capital markets, M&A, underwriting, and advisory services. | Goldman Sachs, Lazard | Securities issuance, advisory focus, limited retail operations |
+| Private | Banks | Universal Bank | Banks combining commercial and investment banking under one entity. | BNP Paribas, Citi, HSBC | Mixed retail and capital-markets operations, diversified financial services |
+| Private | Asset Owners | Foundations and Endowments | Non-profit entities investing funds to support charitable or institutional missions. | Ford Foundation, Harvard Endowment | Non-profit status, perpetual fund, grant-making purpose |
+| Private | Asset Owners | Family Offices | Private firms managing wealth for a single family or group of families. | Walton Enterprises, Cascade Investment | Private ownership, family governance, discretionary investment |
+| Private | Asset Owners | High Net Worth Individuals | Individual investors with substantial personal investable assets. | Warren Buffett, George Soros, Jeff Bezos | Personal capital over threshold (e.g., > USD 1 million), private investments |
+| Private | Asset Owners | Sovereign Wealth Funds | State-owned investment vehicles managing surplus public funds. | GIC, ADIA, Norway GPFG | Public ownership, long-term investment mandate, national wealth fund |
+| Private | Asset Owners | Pension Funds | Funds managing retirement assets for employees or members. | CalPERS, USS Pension Scheme | Employer or occupational link, defined-benefit or defined-contribution structure |
+| Private | Asset Managers | Asset Manager | Firms managing investments for clients under mandate for fees. | BlackRock, Fidelity, Amundi | Fee-based management, discretionary mandates, fiduciary duty |
+| Private | Asset Managers | Real Estate Investment Trusts | Public or private vehicles owning and managing income-producing property. | Prologis, Simon Property Group | Real-estate focus, income from rent, REIT legal structure |
+| Private | Insurer | Insurer | Institutions underwriting and managing risk and investment portfolios from premiums. | Allianz, AIA, AXA | Licensed insurer, underwriting revenue, risk pooling |
+| Private | Funds | Hedge Funds | Private funds pursuing absolute-return strategies using leverage or derivatives. | Bridgewater, Citadel | Private limited partnership, performance fees, complex strategies |
+| Private | Funds | Venture Capital | Funds investing in early-stage, high-growth companies. | Sequoia Capital, Andreessen Horowitz | Early-stage equity, startup focus, GP/LP structure |
+| Private | Funds | Private Equity | Funds acquiring controlling stakes in private companies. | KKR, Blackstone Capital Partners | Buyout focus, illiquid investments, long-term horizon |
+| Private | Funds | Infrastructure Funds | Funds investing in large-scale physical assets such as transport or energy infrastructure. | Macquarie Infrastructure Partners, Brookfield Infrastructure Fund | Real-asset focus, long-term, yield-based returns |
 
 **Public Institutions**  
-| Layer 2 | Layer 3 | Definition/Description | Examples | Classification Notes |
-|---------|---------|------------------------|----------|----------------------|
-| Development Finance Institutions (DFIs) | Multilateral and Regional DFIs | Institutions owned by multiple countries that finance international or regional development. | World Bank, African Development Bank (AfDB), Asian Development Bank (ADB) | Multilateral ownership (≥2 governments), cross-border operations. |
-| Development Finance Institutions (DFIs) | Bilateral DFIs | Institutions owned by a single country that provide development finance internationally. | British International Investment (BII/CDC), Proparco (France), DEG (Germany) | Single-country ownership; invests abroad for development impact. |
-| Development Finance Institutions (DFIs) | National DFIs | Publicly owned financial institutions providing development finance within their home country. | BNDES (Brazil), KfW (Germany), Development Bank of the Philippines | Domestic focus; national development objectives. |
-| Governments and Their Agencies | National | Central or federal government bodies that manage national budgets and implement policies. | Ministries of Finance, Central Banks, National Planning Agencies | Operate at the sovereign or federal level. |
-| Governments and Their Agencies | Subnational | Regional, state, or municipal governments and agencies financing projects within their jurisdiction. | State governments, city development agencies | Operate below national level; regional or local mandate. |
-| National and Multilateral Climate Funds | National Climate Funds | Funds established and owned by a single national government to manage and direct climate finance domestically. | Indonesia Climate Change Trust Fund, Rwanda Green Fund (FONERWA) | Nationally owned; climate-specific focus. |
-| National and Multilateral Climate Funds | Multilateral Climate Funds | Funds owned collectively by multiple governments to finance climate projects internationally, often managed by an international organisation. | Green Climate Fund (GCF), Climate Investment Funds (CIFs) | Multilateral ownership; global or regional climate finance mandate. |
+| Layer 1 | Layer 2 | Layer 3 | Definition | Examples | Key Indicators |
+|---------|---------|---------|------------|----------|----------------|
+| Public | Development Finance Institutions | Multilateral DFI | Institutions owned by multiple governments providing development finance globally. | World Bank, IFC, AfDB | Multilateral ownership, international development mandate |
+| Public | Development Finance Institutions | Bilateral DFI | State-owned entities providing development or export finance to partner countries. | DEG (Germany), FMO (Netherlands), DFC (US) | Single-country ownership, development/export focus |
+| Public | Development Finance Institutions | National DFI | Domestically focused development banks financing national priorities. | BNDES (Brazil), SIDBI (India) | National scope, policy-driven lending, public mandate |
+| Public | Governments | National Government | Sovereign authorities with fiscal and policy powers. | UK Government, Government of Japan | National sovereignty, taxation powers |
+| Public | Governments | Subnational Government | Regional, provincial, or municipal authorities. | State of California, City of Paris | Local or regional jurisdiction, public budget |
+| Public | Climate Funds | Multilateral Climate Fund | International funds capitalized by multiple countries to finance climate action. | Green Climate Fund (GCF), Climate Investment Funds (CIF) | Multilateral governance, climate mandate |
+| Public | Climate Funds | National Climate Fund | Domestic funds dedicated to climate mitigation or adaptation. | Indonesia Climate Change Trust Fund | National government ownership, climate project pipeline |
+| Public | State Owned Enterprises (SOEs) | State Owned Enterprises (SOEs) | Commercial companies majority-owned or controlled by government. | Eskom, Petrobras, EDF | >50% state ownership, commercial operations |
+| Public | State Owned Financial Institutions | State Owned Financial Institutions | Publicly owned banks or insurers providing financial intermediation aligned with policy goals. | China Development Bank, Banco do Brasil | Public ownership, regulated financial entity, policy mandate |
+| Public | Public Funds | Public Funds | Government-backed funds investing public resources for strategic or fiscal purposes. | Ireland Strategic Investment Fund, Future Fund (Australia) | Public capitalization, investment policy objective |
+| Unknown | Unknown | Unknown | Institutions whose type or ownership cannot be reliably determined. | | Insufficient or ambiguous data |
 
 To find the relevant information for the above classification, we recommend following the below steps (in order):  
 1. Visit the official company website and check the “About”, “Governance”, or “Investor Relations” sections to see if you can find any ownership and shareholder information.  
