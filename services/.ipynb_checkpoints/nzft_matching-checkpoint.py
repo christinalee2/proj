@@ -23,13 +23,30 @@ class MatchResult:
     selected_match: Optional[Dict[str, str]] = None
 
 
+def initialize_nzft_session_state():
+    """Initialize all NZFT session state variables if they don't exist"""
+    defaults = {
+        'nzft_uploaded_df': None,
+        'nzft_match_results': None,
+        'nzft_user_selections': {},
+        'nzft_exact_confirmations': {},
+        'nzft_final_df': None,
+        'nzft_last_file': None
+    }
+    
+    for key, default_value in defaults.items():
+        if key not in st.session_state:
+            st.session_state[key] = default_value
 
 
 @st.cache_data(ttl=14400)  # Cache for 4 hours, could honestly be longer
 def load_nzft_data_cached() -> Optional[pd.DataFrame]:
-    """Loads NZFT data from AWS as a csv file, can change the location of this directly 
+    """Loads NZFT data from AWS as a csv file
+    This assumes the nzft file will have the same column names that the current version does
     """
     try:
+        # Use the same pattern as your other S3 operations in connection.py
+        # This will use the default AWS credential chain (environment, IAM role, etc.)
         s3_client = boto3.client('s3', region_name=AWS_REGION)
         
         s3_key = 'auxiliary-data/reference-data/reference-db-2/nzft.csv'
@@ -86,17 +103,11 @@ class NZFTMatcher:
             r'\s+(plc|public\s+limited\s+company|se|oyj|spa)\.?$'
         ]
 
-
-        
-    
     def load_nzft_data(self) -> bool:
         """Load NZFT reference data from fixed S3 location"""
         self.nzft_df = load_nzft_data_cached()
         return self.nzft_df is not None
 
-
-        
-    
     def normalize_for_matching(self, name: str) -> str:
         """Normalize name for exact matching (includes suffix removal)"""
         if not name:
@@ -109,9 +120,6 @@ class NZFTMatcher:
         
         return normalized
 
-
-        
-    
     def find_exact_matches(self, input_names: List[str]) -> Dict[int, Dict[str, str]]:
         """Find exact matches against both entity and entity_clean columns"""
         exact_matches = {}
@@ -152,10 +160,6 @@ class NZFTMatcher:
         
         return exact_matches
 
-
-
-        
-    
     def find_fuzzy_matches(self, input_names: List[str], exclude_exact: Dict[int, Dict[str, str]]) -> Dict[int, List[Tuple[str, float, Dict[str, str]]]]:
         """Find fuzzy matches for non-exact entries"""
         fuzzy_matches = {}
@@ -211,9 +215,6 @@ class NZFTMatcher:
         
         return fuzzy_matches
 
-
-        
-    
     def process_upload(self, df: pd.DataFrame) -> List[MatchResult]:
         """Process an uploaded DataFrame and return matching results"""
         results = []
@@ -278,23 +279,12 @@ class NZFTMatcher:
 
 def render_nzft_page():
     """Render the NZFT matching page"""
+    # Initialize session state FIRST, before any other operations
+    initialize_nzft_session_state()
+    
     st.header("NZFT Institution Matching")
     st.markdown("Upload a file with institution names to match against the NZFT database")
     st.markdown("---")
-    
-    # Initialize session state
-    if 'nzft_uploaded_df' not in st.session_state:
-        st.session_state['nzft_uploaded_df'] = None
-    if 'nzft_match_results' not in st.session_state:
-        st.session_state['nzft_match_results'] = None
-    if 'nzft_user_selections' not in st.session_state:
-        st.session_state['nzft_user_selections'] = {}
-    if 'nzft_exact_confirmations' not in st.session_state:
-        st.session_state['nzft_exact_confirmations'] = {}
-    if 'nzft_final_df' not in st.session_state:
-        st.session_state['nzft_final_df'] = None
-    if 'nzft_last_file' not in st.session_state:
-        st.session_state['nzft_last_file'] = None
     
     matcher = NZFTMatcher()
     
@@ -309,12 +299,13 @@ def render_nzft_page():
     if uploaded_file is not None:
         file_key = f"{uploaded_file.name}_{uploaded_file.size}"
         
-        # Reset if new file uploaded
-        if st.session_state['nzft_last_file'] != file_key:
+        # Reset if new file uploaded - now safe because session state is initialized
+        if st.session_state.get('nzft_last_file') != file_key:
             reset_nzft_session()
             st.session_state['nzft_last_file'] = file_key
         
-        if st.session_state['nzft_uploaded_df'] is None:
+        # Safe to access now
+        if st.session_state.get('nzft_uploaded_df') is None:
             with st.spinner("Processing file..."):
                 try:
                     if uploaded_file.name.endswith('.csv'):
@@ -328,14 +319,16 @@ def render_nzft_page():
                     st.error(f"Error parsing file: {str(e)}")
                     return
         
-        df = st.session_state['nzft_uploaded_df']
+        df = st.session_state.get('nzft_uploaded_df')
+        if df is None:
+            return
         
         st.subheader("File Preview")
         st.dataframe(df.head(10), use_container_width=True)
         st.info(f"Loaded {len(df)} rows with {len(df.columns)} columns")
         
         # Process Matches
-        if st.session_state['nzft_match_results'] is None:
+        if st.session_state.get('nzft_match_results') is None:
             with st.spinner("Finding matches in NZFT database..."):
                 try:
                     match_results = matcher.process_upload(df)
@@ -344,13 +337,17 @@ def render_nzft_page():
                     # Auto-confirm exact matches
                     for result in match_results:
                         if result.match_type == 'exact':
+                            if 'nzft_exact_confirmations' not in st.session_state:
+                                st.session_state['nzft_exact_confirmations'] = {}
                             st.session_state['nzft_exact_confirmations'][result.row_index] = result.exact_match
                     
                 except Exception as e:
                     st.error(f"Error processing matches: {str(e)}")
                     return
         
-        match_results = st.session_state['nzft_match_results']
+        match_results = st.session_state.get('nzft_match_results', [])
+        if not match_results:
+            return
         
         exact_results = [r for r in match_results if r.match_type == 'exact']
         fuzzy_results = [r for r in match_results if r.match_type == 'fuzzy']
@@ -411,7 +408,7 @@ def render_nzft_page():
                             options.append(option_text)
                             option_values.append(match_data)
                         
-                        current_selection = st.session_state['nzft_user_selections'].get(result.row_index)
+                        current_selection = st.session_state.get('nzft_user_selections', {}).get(result.row_index)
                         try:
                             default_index = option_values.index(current_selection) if current_selection in option_values else 0
                         except ValueError:
@@ -426,6 +423,8 @@ def render_nzft_page():
                         )
                         
                         selected_value = option_values[options.index(selected_option)]
+                        if 'nzft_user_selections' not in st.session_state:
+                            st.session_state['nzft_user_selections'] = {}
                         st.session_state['nzft_user_selections'][result.row_index] = selected_value
                     
                     else:
@@ -463,9 +462,6 @@ def render_nzft_page():
                 use_container_width=True
             )
 
-
-
-
     
 def generate_final_results(original_df: pd.DataFrame, match_results: List[MatchResult], target_column: str) -> pd.DataFrame:
     """Generate final DataFrame with separate nzft_id, entity, and entity_clean columns to denote the match, right now it keeps the other current values from the uploaded df, can be switched to keep the values from the nzft file instead"""
@@ -482,12 +478,12 @@ def generate_final_results(original_df: pd.DataFrame, match_results: List[MatchR
         match_data = None
         
         if result.match_type == 'exact' and result.exact_match:
-            confirmed_match = st.session_state['nzft_exact_confirmations'].get(result.row_index)
+            confirmed_match = st.session_state.get('nzft_exact_confirmations', {}).get(result.row_index)
             if confirmed_match:
                 match_data = confirmed_match
         
         elif result.match_type == 'fuzzy':
-            selected_match = st.session_state['nzft_user_selections'].get(result.row_index)
+            selected_match = st.session_state.get('nzft_user_selections', {}).get(result.row_index)
             if selected_match:
                 match_data = selected_match
         
@@ -504,12 +500,17 @@ def generate_final_results(original_df: pd.DataFrame, match_results: List[MatchR
     return final_df
 
 
-
-
-
-
 def reset_nzft_session():
-    for key in ['nzft_uploaded_df', 'nzft_match_results', 'nzft_user_selections', 
-                'nzft_exact_confirmations', 'nzft_final_df', 'nzft_last_file']:
+    """Reset all NZFT session state variables"""
+    # Ensure session state exists first
+    initialize_nzft_session_state()
+    
+    keys_to_reset = ['nzft_uploaded_df', 'nzft_match_results', 'nzft_user_selections', 
+                     'nzft_exact_confirmations', 'nzft_final_df', 'nzft_last_file']
+    
+    for key in keys_to_reset:
         if key in st.session_state:
             del st.session_state[key]
+    
+    # Re-initialize with defaults
+    initialize_nzft_session_state()
