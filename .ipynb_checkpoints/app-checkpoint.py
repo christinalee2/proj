@@ -101,7 +101,7 @@ if not user_logged_in:
         if st.button("Login with OIDC", type="primary"):
             st.session_state.auth_attempted = True
             st.login("oidc")
-            st.stop()  # Add this to prevent further execution
+            st.stop()  
         st.stop()
     else:
         st.error("Authentication failed or still in progress")

@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import io
+import os
 from typing import List, Dict, Tuple, Optional
 from dataclasses import dataclass
 import re
@@ -9,7 +10,7 @@ from botocore.exceptions import ClientError
 
 from utils.fuzzy_matching import get_fitted_matcher
 from utils.text_processing import TextProcessor
-from config import AWS_REGION, S3_BUCKET, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY
+from config import AWS_REGION, S3_BUCKET
 
 
 @dataclass
@@ -24,30 +25,28 @@ class MatchResult:
 
 
 
-
 @st.cache_data(ttl=14400)  # Cache for 4 hours, could honestly be longer
 def load_nzft_data_cached() -> Optional[pd.DataFrame]:
-    """Loads NZFT data from AWS as a csv file
-    This assumes the nzft file will have the same column names that the current version does
+    """Loads NZFT data from AWS as a csv file, can change the location of this directly 
     """
     try:
-        s3_client = boto3.client(
-            's3',
-            region_name=AWS_REGION,
-            aws_access_key_id=AWS_ACCESS_KEY_ID,
-            aws_secret_access_key=AWS_SECRET_ACCESS_KEY
-        )
+        s3_client = boto3.client('s3', region_name=AWS_REGION)
         
         s3_key = 'auxiliary-data/reference-data/reference-db-2/nzft.csv'
         
+        st.info(f"Attempting to load NZFT data from s3://{S3_BUCKET}/{s3_key}")
+        
         obj = s3_client.get_object(Bucket=S3_BUCKET, Key=s3_key)
         nzft_df = pd.read_csv(obj['Body'])
+        
+        st.success(f"Successfully loaded NZFT data with {len(nzft_df)} rows")
         
         required_columns = ['nzft_id', 'entity', 'entity_clean', 'country_cpi']
         missing_columns = [col for col in required_columns if col not in nzft_df.columns]
         
         if missing_columns:
             st.error(f"NZFT data missing required columns: {missing_columns}")
+            st.info(f"Available columns: {list(nzft_df.columns)}")
             return None
         
         nzft_df['entity'] = nzft_df['entity'].fillna('').astype(str)
@@ -58,13 +57,20 @@ def load_nzft_data_cached() -> Optional[pd.DataFrame]:
         return nzft_df
         
     except ClientError as e:
-        if e.response['Error']['Code'] == 'NoSuchKey':
+        error_code = e.response['Error']['Code']
+        if error_code == 'NoSuchKey':
             st.error(f"NZFT file not found at s3://{S3_BUCKET}/{s3_key}")
+        elif error_code == 'NoSuchBucket':
+            st.error(f"S3 bucket '{S3_BUCKET}' not found")
+        elif error_code in ['AccessDenied', 'AuthorizationHeaderMalformed', 'InvalidAccessKeyId']:
+            st.error(f"AWS authentication error: {str(e)}")
+            st.info("This suggests an issue with AWS credentials or permissions. Since other tables work, try checking if you have specific permissions for this file.")
         else:
-            st.error(f"Error accessing S3: {str(e)}")
+            st.error(f"S3 error ({error_code}): {str(e)}")
         return None
     except Exception as e:
         st.error(f"Error loading NZFT data: {str(e)}")
+        st.exception(e)
         return None
 
 
@@ -190,12 +196,15 @@ class NZFTMatcher:
                                 }
                                 
                                 # Create display name for UI
-                                display_name = f"{nzft_row['entity']} / {nzft_row['entity_clean']}"
+                                display_name = str(nzft_row['entity'])
+                                if str(nzft_row['entity_clean']) and str(nzft_row['entity_clean']) != str(nzft_row['entity']):
+                                    display_name += f" / {nzft_row['entity_clean']}"
                                 
                                 enhanced_matches.append((display_name, score, match_data))
                                 break
                     
-                    fuzzy_matches[idx] = enhanced_matches
+                    if enhanced_matches:
+                        fuzzy_matches[idx] = enhanced_matches
         
         except Exception as e:
             st.error(f"Error in fuzzy matching: {str(e)}")
@@ -203,52 +212,74 @@ class NZFTMatcher:
         return fuzzy_matches
 
 
-
         
+    
     def process_upload(self, df: pd.DataFrame) -> List[MatchResult]:
-        """Process the file uploaded"""
-        if self.target_column not in df.columns:
-            raise ValueError(f"Required column '{self.target_column}' not found in uploaded file")
+        """Process an uploaded DataFrame and return matching results"""
+        results = []
         
-        if self.nzft_df is None:
-            raise ValueError("NZFT reference data not loaded. Please try refreshing the page.")
+        if self.target_column not in df.columns:
+            available_columns = list(df.columns)
+            st.error(f"Column '{self.target_column}' not found. Available columns: {available_columns}")
+            
+            # Try to find a suitable column
+            possible_columns = ['institution', 'entity', 'name', 'company', 'organization']
+            found_column = None
+            for col in possible_columns:
+                if col in available_columns:
+                    found_column = col
+                    break
+            
+            if found_column:
+                st.warning(f"Using column '{found_column}' instead of '{self.target_column}'")
+                self.target_column = found_column
+            else:
+                st.error("No suitable column found for matching. Please ensure your file has a column named 'institution', 'entity', 'name', 'company', or 'organization'")
+                return results
         
         input_names = df[self.target_column].fillna('').astype(str).tolist()
         
+        if not self.load_nzft_data():
+            st.error("Failed to load NZFT reference data. Please check your S3 configuration and file location.")
+            st.info(f"Expected location: s3://{S3_BUCKET}/auxiliary-data/reference-data/reference-db-2/nzft.csv")
+            return results
+        
+        # Find exact matches first
         exact_matches = self.find_exact_matches(input_names)
+        
+        # Find fuzzy matches for non-exact entries
         fuzzy_matches = self.find_fuzzy_matches(input_names, exact_matches)
         
-        results = []
+        # Create MatchResult objects
         for idx, name in enumerate(input_names):
             if idx in exact_matches:
-                result = MatchResult(
+                results.append(MatchResult(
                     original_name=name,
                     row_index=idx,
                     match_type='exact',
                     exact_match=exact_matches[idx]
-                )
+                ))
             elif idx in fuzzy_matches:
-                result = MatchResult(
+                results.append(MatchResult(
                     original_name=name,
                     row_index=idx,
                     match_type='fuzzy',
                     fuzzy_matches=fuzzy_matches[idx]
-                )
+                ))
             else:
-                result = MatchResult(
+                results.append(MatchResult(
                     original_name=name,
                     row_index=idx,
                     match_type='none'
-                )
-            
-            results.append(result)
+                ))
         
         return results
 
 
 def render_nzft_page():
+    """Render the NZFT matching page"""
     st.header("NZFT Institution Matching")
-    st.markdown("Upload a file with institutions to match against NZFT reference data")
+    st.markdown("Upload a file with institution names to match against the NZFT database")
     st.markdown("---")
     
     # Initialize session state
@@ -260,63 +291,38 @@ def render_nzft_page():
         st.session_state['nzft_user_selections'] = {}
     if 'nzft_exact_confirmations' not in st.session_state:
         st.session_state['nzft_exact_confirmations'] = {}
+    if 'nzft_final_df' not in st.session_state:
+        st.session_state['nzft_final_df'] = None
+    if 'nzft_last_file' not in st.session_state:
+        st.session_state['nzft_last_file'] = None
     
     matcher = NZFTMatcher()
     
-    # Load NZFT data automatically
-    with st.spinner("Loading NZFT reference data..."):
-        try:
-            if matcher.load_nzft_data() and matcher.nzft_df is not None:
-                st.success(f"NZFT reference data loaded: {len(matcher.nzft_df)} entities")
-                
-                with st.expander("Preview NZFT Reference Data"):
-                    st.dataframe(matcher.nzft_df.head(10), use_container_width=True)
-            else:
-                st.error("Failed to load NZFT reference data. Please check your S3 configuration and file location.")
-                st.info(f"Expected location: s3://{S3_BUCKET}/auxiliary-data/reference-data/reference-db-2/nzft.csv")
-                return
-        except Exception as e:
-            st.error(f"Error loading NZFT data: {str(e)}")
-            st.info(f"Expected location: s3://{S3_BUCKET}/auxiliary-data/reference-data/reference-db-2/nzft.csv")
-            return
-    
-    st.markdown("---")
-    
-    with st.expander("Name of institution column in uploaded file"):
-        target_column = st.text_input(
-            "Target Column Name",
-            value=matcher.target_column,
-            help="The column name in your upload file that contains institution names to match"
-        )
-        matcher.target_column = target_column
-    
-    st.subheader("1. Upload File with Institutions to Match")
+    # File upload
+    st.subheader("1. Upload Institution Data")
     uploaded_file = st.file_uploader(
-        "Choose CSV or Excel file with institutions to match",
-        type=['csv', 'xlsx', 'xls'],
-        key="nzft_upload"
+        "Choose a CSV or Excel file",
+        type=['csv', 'xlsx'],
+        help="File should contain a column named 'institution' with institution names to match"
     )
     
     if uploaded_file is not None:
-        if st.session_state['nzft_uploaded_df'] is None or uploaded_file.name != st.session_state.get('nzft_last_file'):
-            with st.spinner("Loading file..."):
+        file_key = f"{uploaded_file.name}_{uploaded_file.size}"
+        
+        # Reset if new file uploaded
+        if st.session_state['nzft_last_file'] != file_key:
+            reset_nzft_session()
+            st.session_state['nzft_last_file'] = file_key
+        
+        if st.session_state['nzft_uploaded_df'] is None:
+            with st.spinner("Processing file..."):
                 try:
                     if uploaded_file.name.endswith('.csv'):
-                        df = pd.read_csv(uploaded_file, engine='c')
+                        df = pd.read_csv(uploaded_file)
                     else:
-                        df = pd.read_excel(uploaded_file, engine='openpyxl')
-                    
-                    df.columns = df.columns.str.strip()
-                    
-                    if matcher.target_column not in df.columns:
-                        st.error(f"Column '{matcher.target_column}' not found. Available columns: {', '.join(df.columns)}")
-                        return
+                        df = pd.read_excel(uploaded_file)
                     
                     st.session_state['nzft_uploaded_df'] = df
-                    st.session_state['nzft_last_file'] = uploaded_file.name
-                    st.session_state['nzft_match_results'] = None
-                    st.session_state['nzft_user_selections'] = {}
-                    st.session_state['nzft_exact_confirmations'] = {}
                     
                 except Exception as e:
                     st.error(f"Error parsing file: {str(e)}")
@@ -456,7 +462,6 @@ def render_nzft_page():
                 mime="text/csv",
                 use_container_width=True
             )
-
 
 
 
