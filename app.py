@@ -134,6 +134,7 @@ def initialize_session_state():
             st.session_state[key] = value
 
 
+
 def render_sidebar():
     """Render the sidebar with navigation and controls"""
     with st.sidebar:
@@ -172,8 +173,34 @@ def render_sidebar():
         
         st.markdown("---")
         
-        # Call the navigation fragment INSIDE the sidebar context
-        page = render_navigation_fragment()
+        # Handle navigation directly without fragment for now
+        st.subheader("Menu")
+        
+        page_options = ["Upload New Data", "View Current Tables", "NZFT"]
+        
+        if 'current_page' not in st.session_state:
+            st.session_state['current_page'] = 'Upload New Data'
+            
+        try:
+            current_index = page_options.index(st.session_state['current_page'])
+        except ValueError:
+            current_index = 0
+            st.session_state['current_page'] = page_options[0]
+        
+        # Use on_change callback to update session state properly
+        def update_page():
+            st.session_state['current_page'] = st.session_state['navigation']
+        
+        page = st.radio(
+            "",
+            page_options,
+            key="navigation",
+            index=current_index,
+            on_change=update_page  # This ensures proper state update
+        )
+        
+        # Return the current page from session state
+        current_page = st.session_state['current_page']
         
         st.markdown("---")
         
@@ -182,42 +209,7 @@ def render_sidebar():
         
         st.caption(f"Last updated: {datetime.now().strftime('%Y-%m-%d')}")
     
-    return page
-
-
-
-
-@st.fragment
-def render_navigation_fragment():
-    """Fragment for navigation - called inside sidebar context"""
-    st.subheader("Menu")
-    
-    page_options = ["Upload New Data", "View Current Tables", "NZFT"]
-    
-    if 'current_page' not in st.session_state:
-        st.session_state['current_page'] = 'Upload New Data'
-        
-    try:
-        current_index = page_options.index(st.session_state['current_page'])
-    except ValueError:
-        current_index = 0
-        st.session_state['current_page'] = page_options[0]
-    
-    page = st.radio(
-        "",
-        page_options,
-        key="navigation",
-        index=current_index
-    )
-    
-    # Only update if page actually changed
-    if page != st.session_state['current_page']:
-        st.session_state['current_page'] = page
-    
-    return page
-
-
-
+    return current_page
 
 @st.fragment  
 def render_cache_controls_fragment():
