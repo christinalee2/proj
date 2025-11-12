@@ -134,71 +134,94 @@ def initialize_session_state():
             st.session_state[key] = value
 
 
-
-@st.fragment
 def render_sidebar():
     """Render the sidebar with navigation and controls"""
     with st.sidebar:
         st.title("Reference Data Manager")
         st.markdown("---")
         
-        # Authentication status and user info  
+        # Cache user info in session state to avoid repeated user object access
+        if 'user_info' not in st.session_state:
+            user = st.user
+            user_email = user.get('email', 'No email available')
+            authenticated_username = (
+                user.get('email', '').split('@')[0] if user.get('email') 
+                else user.get('preferred_username', 
+                user.get('name', 'authenticated_user'))
+            )
+            st.session_state.user_info = {
+                'email': user_email,
+                'username': authenticated_username
+            }
+        
         st.subheader("Authentication")
-        user = st.user
-        user_email = user.get('email', 'No email available')
-        st.success(f"Logged in as: **{user_email}**")
+        st.success(f"Logged in as: **{st.session_state.user_info['email']}**")
         
-        
-        # Update session state with authenticated username
-        authenticated_username = (
-            user.get('email', '').split('@')[0] if user.get('email') 
-            else user.get('preferred_username', 
-            user.get('name', 'authenticated_user'))
-        )
-        st.session_state['username'] = authenticated_username
+        # Update session state with cached username
+        st.session_state['username'] = st.session_state.user_info['username']
         
         st.markdown("---")
         
         st.subheader("Current User")
         st.text_input(
             "Active User",
-            value=authenticated_username,
+            value=st.session_state.user_info['username'],
             disabled=True,
             help="Authenticated user from Cognito"
         )
         
         st.markdown("---")
         
-        st.subheader("Menu")
-        page = st.radio(
-            "",
-            [
-                "Upload New Data",
-                "View Current Tables",
-                "NZFT"  
-            ],
-            key="navigation",
-            index=0 if st.session_state['current_page'] == 'Upload New Data' 
-                else 1 if st.session_state['current_page'] == 'View Current Tables'
-                else 2
-                  # else 1
-                #else 2
-        )
-        
-        st.session_state['current_page'] = page
+        # Call the navigation fragment INSIDE the sidebar context
+        page = render_navigation_fragment()
         
         st.markdown("---")
-
-        render_cache_controls()
+        
+        # Call the cache controls fragment INSIDE the sidebar context
+        render_cache_controls_fragment()
         
         st.caption(f"Last updated: {datetime.now().strftime('%Y-%m-%d')}")
     
-    return st.session_state['current_page']
+    return page
+
+
+
+
+@st.fragment
+def render_navigation_fragment():
+    """Fragment for navigation - called inside sidebar context"""
+    st.subheader("Menu")
+    
+    page_options = ["Upload New Data", "View Current Tables", "NZFT"]
+    
+    if 'current_page' not in st.session_state:
+        st.session_state['current_page'] = 'Upload New Data'
+        
+    try:
+        current_index = page_options.index(st.session_state['current_page'])
+    except ValueError:
+        current_index = 0
+        st.session_state['current_page'] = page_options[0]
+    
+    page = st.radio(
+        "",
+        page_options,
+        key="navigation",
+        index=current_index
+    )
+    
+    # Only update if page actually changed
+    if page != st.session_state['current_page']:
+        st.session_state['current_page'] = page
+    
+    return page
+
+
 
 
 @st.fragment  
-def render_cache_controls():
-    """Fragment cache controls to avoid full rerun"""
+def render_cache_controls_fragment():
+    """Fragment for cache controls - called inside sidebar context"""
     st.subheader("Cache Management")
     col1, col2 = st.columns(2)
     
