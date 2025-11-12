@@ -13,7 +13,15 @@ from services.nzft_matching import render_nzft_page, reset_nzft_session
 load_dotenv()
 
 
+@st.cache_data(ttl=14400)
+def get_table_configs_cached():
+    """Caching table config loading"""
+    return {
+        'available_tables': get_available_tables(),
+        'display_names': get_table_display_names()
+    }
 
+    
 def load_auth_config():
     from streamlit.runtime.secrets import secrets_singleton
 
@@ -112,15 +120,22 @@ user = st.user
 
         
 def initialize_session_state():
-    """Initializes default page variables"""
-    if 'current_page' not in st.session_state:
-        st.session_state['current_page'] = 'Upload New Data'
-    if 'username' not in st.session_state:
-        st.session_state['username'] = 'analyst'
-    if 'selected_table' not in st.session_state:
-        st.session_state['selected_table'] = 'institution'
+    """Initialize all session state at once to reduce overhead"""
+    defaults = {
+        'current_page': 'Upload New Data',
+        'username': 'analyst',
+        'selected_table': 'institution',
+        'auth_attempted': False
+    }
+    
+    # Batch update session state - only set if not already present
+    for key, value in defaults.items():
+        if key not in st.session_state:
+            st.session_state[key] = value
 
 
+
+@st.fragment
 def render_sidebar():
     """Render the sidebar with navigation and controls"""
     with st.sidebar:
@@ -133,16 +148,6 @@ def render_sidebar():
         user_email = user.get('email', 'No email available')
         st.success(f"Logged in as: **{user_email}**")
         
-        # if st.button("Logout", type="secondary", use_container_width=True):
-        #     for key in list(st.session_state.keys()):
-        #         del st.session_state[key]
-            
-        #     # Reset auth state
-        #     st.session_state.auth_attempted = False
-            
-        #     # Logout and redirect
-        #     st.logout()
-        #     st.rerun()
         
         # Update session state with authenticated username
         authenticated_username = (
@@ -183,81 +188,92 @@ def render_sidebar():
         st.session_state['current_page'] = page
         
         st.markdown("---")
-        
 
-        st.subheader("Cache Management")
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            if st.button("🔄 Clear Data Cache", help="Clear cached table data", use_container_width=True):
-                st.cache_data.clear()
-                # Clear all table reference data from session state, useful when there's a lot of new data etc.
-                keys_to_clear = [key for key in st.session_state.keys() if key.endswith('_reference_data')]
-                for key in keys_to_clear:
-                    del st.session_state[key]
-                st.success("Data cache cleared!")
-                st.rerun()
-        
-        with col2:
-            if st.button("🔄 Clear All", help="Clear all caches", use_container_width=True):
-                st.cache_data.clear()
-                st.cache_resource.clear()
-                keys_to_clear = [key for key in st.session_state.keys() if key.endswith('_reference_data')]
-                for key in keys_to_clear:
-                    del st.session_state[key]
-                st.success("All caches cleared!")
-                st.rerun()
-        
-        # Add NZFT reset button
-        if st.session_state.get('current_page') == 'NZFT':
-            st.markdown("---")
-            if st.button("🔄 Reset NZFT Session", help="Clear NZFT matching data", use_container_width=True):
-                reset_nzft_session()
-                st.success("NZFT session reset!")
-                st.rerun()
-        
-        st.caption("Data cached for 2-4 hours")
-        st.caption("Services cached indefinitely")
-        
-        st.markdown("---")
+        render_cache_controls()
         
         st.caption(f"Last updated: {datetime.now().strftime('%Y-%m-%d')}")
     
     return st.session_state['current_page']
 
 
-def render_upload_page():
-    """Render the upload page, lets you select table and single/bulk entry"""
-    st.header("Upload New Data")
-    st.markdown("This tool lets you add new data to the CPI reference tables. You can upload a single entry or import multiple records at once, depending on your needs. All submissions are reviewed by the research team before being finalized. To help ensure accuracy, please review the [reference table documentation](https://www.notion.so/cpi-all/Reference-Tables-1f3efb28632b80b4b53dec019a97d70a) before uploading.")
-    st.markdown("---")
+@st.fragment  
+def render_cache_controls():
+    """Fragment cache controls to avoid full rerun"""
+    st.subheader("Cache Management")
+    col1, col2 = st.columns(2)
     
-    # Table selection
+    with col1:
+        if st.button("🔄 Clear Data Cache", help="Clear cached table data", use_container_width=True):
+            st.cache_data.clear()
+            keys_to_clear = [key for key in st.session_state.keys() if key.endswith('_reference_data')]
+            for key in keys_to_clear:
+                del st.session_state[key]
+            st.success("Data cache cleared!")
+    
+    with col2:
+        if st.button("🔄 Clear All", help="Clear all caches", use_container_width=True):
+            st.cache_data.clear()
+            st.cache_resource.clear()
+            keys_to_clear = [key for key in st.session_state.keys() if key.endswith('_reference_data')]
+            for key in keys_to_clear:
+                del st.session_state[key]
+            st.success("All caches cleared!")
+    
+    # Add NZFT reset button
+    if st.session_state.get('current_page') == 'NZFT':
+        st.markdown("---")
+        if st.button("🔄 Reset NZFT Session", help="Clear NZFT matching data", use_container_width=True):
+            from services.nzft_matching import reset_nzft_session
+            reset_nzft_session()
+            st.success("NZFT session reset!")
+    
+    st.caption("Data cached for 2-4 hours")
+    st.caption("Services cached indefinitely")
+
+    
+
+@st.fragment
+def render_table_selection():
+    """Fragment table selection to avoid full rerun"""
     st.subheader("1. Select Table")
     
-    available_tables = get_available_tables()
-    table_display_names = get_table_display_names()
+    configs = get_table_configs_cached()
+    available_tables = configs['available_tables']
+    table_display_names = configs['display_names']
     
     display_options = [f"{table_display_names[table]} ({table})" for table in available_tables]
+    
+    # Use session state to maintain selection
+    if 'selected_table_display' not in st.session_state:
+        default_table = st.session_state.get('selected_table', 'institution')
+        try:
+            default_index = available_tables.index(default_table)
+        except ValueError:
+            default_index = 0
+        st.session_state.selected_table_display = display_options[default_index]
+    
+    try:
+        current_index = display_options.index(st.session_state.selected_table_display)
+    except ValueError:
+        current_index = 0
+        st.session_state.selected_table_display = display_options[0]
     
     selected_display = st.selectbox(
         "Which table do you want to upload to?",
         options=display_options,
-        index=available_tables.index(st.session_state.get('selected_table', 'institution')),
-        # help="Choose the table where you want to add data",
+        index=current_index,
         key="upload_table_selector"
     )
     
     selected_table = selected_display.split(' (')[-1].rstrip(')')
     st.session_state['selected_table'] = selected_table
+    st.session_state.selected_table_display = selected_display
+    
+    return selected_table
 
-    config = get_table_config(selected_table)
-    if config and hasattr(config, 'general_description') and config.general_description:
-        st.markdown(f"{config.general_description}")
-    
-    
-    st.markdown("---")
-    
+@st.fragment
+def render_upload_method_selection(selected_table):
+    """Fragment upload method selection"""
     st.subheader("2. Upload Method")
     upload_method = st.radio(
         "How would you like to upload data?",
@@ -265,6 +281,26 @@ def render_upload_page():
         horizontal=True,
         key=f"upload_method_{selected_table}"
     )
+    return upload_method
+
+
+
+
+def render_upload_page():
+    """Render the upload page with fragments"""
+    st.header("Upload New Data")
+    st.markdown("This tool lets you add new data to the CPI reference tables. You can upload a single entry or import multiple records at once, depending on your needs. All submissions are reviewed by the research team before being finalized. To help ensure accuracy, please review the [reference table documentation](https://www.notion.so/cpi-all/Reference-Tables-1f3efb28632b80b4b53dec019a97d70a) before uploading.")
+    st.markdown("---")
+    
+    selected_table = render_table_selection()
+
+    config = get_table_config(selected_table)
+    if config and hasattr(config, 'general_description') and config.general_description:
+        st.markdown(f"{config.general_description}")
+    
+    st.markdown("---")
+    
+    upload_method = render_upload_method_selection(selected_table)
     
     st.markdown("---")
     
@@ -398,22 +434,29 @@ def render_table_view(table_name: str):
 
 
 def render_view_tables_page():
-    """Render the view tables page -- also may delete"""
+    """Render the view tables page"""
     st.header("View Current Tables")
     st.markdown("Browse your reference data")
     st.markdown("---")
     
     st.subheader("Select Table")
     
-    available_tables = get_available_tables()
-    table_display_names = get_table_display_names()
+    # Use cached configs
+    configs = get_table_configs_cached()
+    available_tables = configs['available_tables']
+    table_display_names = configs['display_names']
     
     display_options = [f"{table_display_names[table]} ({table})" for table in available_tables]
+    
+    try:
+        current_index = available_tables.index(st.session_state.get('selected_table', 'institution'))
+    except ValueError:
+        current_index = 0
     
     selected_display = st.selectbox(
         "Which table would you like to view?",
         options=display_options,
-        index=available_tables.index(st.session_state.get('selected_table', 'institution')),
+        index=current_index,
         help="Choose a table to view its contents",
         key="view_table_selector"
     )
@@ -431,21 +474,23 @@ def render_view_tables_page():
 
 
 def main():
-    """Main application entry point"""
+    """Main application entry point with optimizations"""
     
-    # Initialize
-    initialize_session_state()
+    # Initialize session state only once
+    if 'app_initialized' not in st.session_state:
+        initialize_session_state()
+        st.session_state.app_initialized = True
     
     page = render_sidebar()
     
-    # Render selected page
+    # Lazy load page modules only when needed
     if page == "Upload New Data":
         render_upload_page()
     elif page == "View Current Tables":
         render_view_tables_page()
-    elif page == "NZFT": 
+    elif page == "NZFT":
+        from services.nzft_matching import render_nzft_page
         render_nzft_page()
-
 
 if __name__ == "__main__":
     main()
