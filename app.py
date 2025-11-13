@@ -174,7 +174,6 @@ def render_sidebar():
         with col1:
             if st.button("Clear Data Cache", use_container_width=True):
                 clear_all_data_cache()
-                clear_all_services()
                 st.session_state.app_ready = False
                 st.success("Cache cleared")
                 st.rerun()
