@@ -127,7 +127,7 @@ def initialize_session_state():
         'current_page': 'Upload New Data',
         'username': 'analyst',
         'selected_table': 'institution',
-        'auth_attempted': False
+        'auth_attempted': False,
 
 
         'form_data': {},
