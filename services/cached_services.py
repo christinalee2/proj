@@ -45,6 +45,26 @@ class OptimizedServices:
         
         return st.session_state.lookup_service
 
+        
+    @staticmethod
+    def get_standardization_service():
+        """Get cached standardization service"""
+        if 'standardization_service' not in st.session_state:
+            from services.standardization_service import StandardizationService
+            st.session_state.standardization_service = StandardizationService()
+        return st.session_state.standardization_service
+    
+    @staticmethod
+    def get_hierarchy_service():
+        """Get cached hierarchy service"""
+        if 'hierarchy_service' not in st.session_state:
+            from services.hierarchy_service import HierarchyService
+            st.session_state.hierarchy_service = HierarchyService()
+        return st.session_state.hierarchy_service
+
+
+
+
 # Backward compatibility - drop-in replacements
 @st.cache_resource(ttl=None)
 def get_query_service():

@@ -10,7 +10,7 @@ from table_configs import get_available_tables, get_table_display_names, get_tab
 
 # Use optimized cached queries for better Docker performance
 from database.cached_queries import get_table_data_cached
-from database.cached_services import OptimizedServices  # Add optimized services
+from services.cached_services import OptimizedServices  # Add optimized services
 from services.nzft_matching import render_nzft_page, reset_nzft_session
 
 

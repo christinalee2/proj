@@ -16,7 +16,7 @@ import time
 from config import CURRENT_YEAR, should_auto_populate_year, get_audit_data, AUDIT_FIELDS
 from services.hierarchy_service import HierarchyService
 from ui.hierarchy_ui import render_hierarchy_options_for_duplicates, render_hierarchy_options_for_fuzzy_matches, render_new_institution_hierarchy_option, render_institution_search_widget
-from database.cached_services import OptimizedServices
+from services.cached_services import OptimizedServices
 
 
 @dataclass
@@ -312,7 +312,7 @@ def create_table_entry(table_name: str, data: Dict[str, Any], user: str = "syste
     
     if table_name == 'institution':
         # Use existing institution service
-        service = InstitutionService()
+        service = OptimizedServices.get_institution_service()
         return service.create_institution(
             institution_name=data.get('institution_cpi', ''),
             institution_type_layer1=data.get('institution_type_layer1'),
