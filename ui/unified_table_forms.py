@@ -446,7 +446,6 @@ def create_table_entry(table_name: str, data: Dict[str, Any], user: str = "syste
 
 
 
-@st.fragment
 def render_form_field(field_config, dropdown_options: Dict[str, List[str]], key_suffix: str, existing_institutions: pd.DataFrame = None) -> Any:
     """Render a single form field with improved prefill handling"""
     field_key = f"{field_config.name}_{key_suffix}"
@@ -612,7 +611,6 @@ def get_table_reference_data(table_name: str, config):
 
 
 
-@st.fragment
 def render_unified_single_entry_form(table_name: str):
     """
     Unified single entry form with duplicate checking and Keep functionality for any table
