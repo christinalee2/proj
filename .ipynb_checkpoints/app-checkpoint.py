@@ -10,7 +10,7 @@ from table_configs import get_available_tables, get_table_display_names, get_tab
 
 # Use ultra-optimized cached queries
 from database.cached_queries import warm_all_caches, clear_all_caches
-from database.cached_services import OptimizedServices
+from services.cached_services import OptimizedServices
 from services.nzft_matching import render_nzft_page, reset_nzft_session
 
 
