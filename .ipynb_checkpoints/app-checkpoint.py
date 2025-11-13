@@ -2,6 +2,8 @@ import streamlit as st
 import pandas as pd
 from datetime import datetime
 from dotenv import load_dotenv
+from functools import lru_cache
+import pickle
 import os
 
 from table_configs import get_available_tables, get_table_display_names, get_table_config
@@ -126,6 +128,19 @@ def initialize_session_state():
         'username': 'analyst',
         'selected_table': 'institution',
         'auth_attempted': False
+
+
+        'form_data': {},
+        'search_results': None,
+        'validation_results': None,
+        'institutions_loaded': False,
+        'dropdown_options_loaded': False,
+        'fuzzy_matcher_loaded': False,
+        'show_search_section': False,
+        'show_validation_section': False,
+        'last_search_query': '',
+        'matcher_cache': None,
+        'institutions_cache': None
     }
     
     # Batch update session state - only set if not already present
@@ -297,7 +312,6 @@ def render_upload_method_selection(selected_table):
         key=f"upload_method_{selected_table}"
     )
     return upload_method
-
 
 
 

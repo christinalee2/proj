@@ -39,20 +39,16 @@ def initialize_nzft_session_state():
             st.session_state[key] = default_value
 
 
-@st.cache_data(ttl=14400)  # Cache for 4 hours, could honestly be longer
+@st.cache_data(ttl=14400)  # Cache for 4 hours, could be longer probably
 def load_nzft_data_cached() -> Optional[pd.DataFrame]:
     """Loads NZFT data from AWS as a csv file
     This assumes the nzft file will have the same column names that the current version does
     """
     try:
-        # Use the same pattern as your other S3 operations in connection.py
-        # This will use the default AWS credential chain (environment, IAM role, etc.)
         s3_client = boto3.client('s3', region_name=AWS_REGION)
         
         s3_key = 'auxiliary-data/reference-data/reference-db-2/nzft.csv'
-        
-        st.info(f"Attempting to load NZFT data from s3://{S3_BUCKET}/{s3_key}")
-        
+                
         obj = s3_client.get_object(Bucket=S3_BUCKET, Key=s3_key)
         nzft_df = pd.read_csv(obj['Body'])
         
@@ -81,7 +77,6 @@ def load_nzft_data_cached() -> Optional[pd.DataFrame]:
             st.error(f"S3 bucket '{S3_BUCKET}' not found")
         elif error_code in ['AccessDenied', 'AuthorizationHeaderMalformed', 'InvalidAccessKeyId']:
             st.error(f"AWS authentication error: {str(e)}")
-            st.info("This suggests an issue with AWS credentials or permissions. Since other tables work, try checking if you have specific permissions for this file.")
         else:
             st.error(f"S3 error ({error_code}): {str(e)}")
         return None

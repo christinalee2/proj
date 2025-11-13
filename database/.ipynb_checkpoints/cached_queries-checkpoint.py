@@ -1,53 +1,130 @@
 import streamlit as st
 import pandas as pd
+import pickle
+import os
+from datetime import datetime, timedelta
 from database.queries import QueryService
 
+# Enhanced disk caching for Docker persistence
+class DiskCache:
+    def __init__(self, cache_dir="/tmp/streamlit_cache"):
+        self.cache_dir = cache_dir
+        os.makedirs(cache_dir, exist_ok=True)
+    
+    def save(self, key, data, ttl_hours=24):
+        """Save data to disk with TTL"""
+        try:
+            cache_file = os.path.join(self.cache_dir, f"{key}.pkl")
+            expiry = datetime.now() + timedelta(hours=ttl_hours)
+            cache_data = {'data': data, 'expiry': expiry}
+            with open(cache_file, 'wb') as f:
+                pickle.dump(cache_data, f)
+        except Exception as e:
+            print(f"Error saving to disk cache: {e}")
+    
+    def load(self, key):
+        """Load data from disk if not expired"""
+        try:
+            cache_file = os.path.join(self.cache_dir, f"{key}.pkl")
+            if not os.path.exists(cache_file):
+                return None
+            
+            with open(cache_file, 'rb') as f:
+                cache_data = pickle.load(f)
+            
+            if datetime.now() > cache_data['expiry']:
+                os.remove(cache_file)
+                return None
+            
+            return cache_data['data']
+        except Exception as e:
+            print(f"Error loading from disk cache: {e}")
+            return None
 
-@st.cache_data(ttl=7200)  # 2 hours - reference data rarely changes
+# Global cache instance
+disk_cache = DiskCache()
+
+@st.cache_data(ttl=86400, show_spinner=False, max_entries=1)  # 24 hours, no spinner
 def get_all_institutions_cached():
     """
-    Cached version of get_all_institutions
+    Cached version of get_all_institutions with disk persistence
     Returns all institutions from the database
-    Cache expires after 2 hours
+    Cache expires after 24 hours
     """
+    # Try disk cache first
+    data = disk_cache.load("institutions_data")
+    if data is not None:
+        return data
+    
+    # Load from database if not in disk cache
     service = QueryService()
-    return service.get_all_institutions()
+    data = service.get_all_institutions()
+    
+    # Save to disk cache
+    disk_cache.save("institutions_data", data, ttl_hours=24)
+    
+    return data
 
-
-@st.cache_data(ttl=7200)
+@st.cache_data(ttl=86400, show_spinner=False)  # 24 hours, no spinner  
 def get_table_data_cached(table_name: str, limit: int = None) -> pd.DataFrame:
-    """Get cached table data for any table"""
+    """Get cached table data for any table with disk persistence"""
+    cache_key = f"table_data_{table_name}_{limit or 'all'}"
+    
+    # Try disk cache first
+    data = disk_cache.load(cache_key)
+    if data is not None:
+        return data
+    
+    # Load from database
     from database.queries import QueryService
-    return QueryService.get_table_data(table_name, limit)
+    data = QueryService.get_table_data(table_name, limit)
+    
+    # Save to disk cache
+    disk_cache.save(cache_key, data, ttl_hours=24)
+    
+    return data
 
-
-@st.cache_data(ttl=7200)  # 2 hours
+@st.cache_data(ttl=86400, show_spinner=False) 
 def get_countries_cached():
     """
-    Cached version of get_countries
+    Cached version of get_countries with disk persistence
     Returns all countries from geography table
-    Cache expires after 2 hours
+    Cache expires after 24 hours
     """
+    # Try disk cache first
+    data = disk_cache.load("countries_data")
+    if data is not None:
+        return data
+    
+    # Load from database
     service = QueryService()
-    return service.get_countries()
+    data = service.get_countries()
+    
+    # Save to disk cache
+    disk_cache.save("countries_data", data, ttl_hours=24)
+    
+    return data
 
-
-@st.cache_data(ttl=14400)  # 4 hours - dropdown options change very rarely
+@st.cache_data(ttl=86400, show_spinner=False)  # 24 hours - dropdown options don't change often
 def get_dropdown_options():
     """
-    Load and cache all dropdown options at once
+    Load and cache all dropdown options at once with disk persistence
     Returns dictionary with all dropdown option lists
-    Cache expires after 4 hours
     
     Returns:
         Dict with keys: type1, type2, type3, countries
     """
+    # Try disk cache first
+    options = disk_cache.load("dropdown_options")
+    if options is not None:
+        return options
+    
+    # Build options fresh
     existing_insts = get_all_institutions_cached()
     countries_df = get_countries_cached()
     
     country_list = countries_df['country_cpi'].tolist() if not countries_df.empty else []
     
-    # Default options
     type1_options = ['', 'Public', 'Private']
     type2_options = ['', 'Funds', 'Corporation', 'Commercial FI', 'Government', 
                      'Institutional Investors', 'Bilateral DFI', 'SOE', 
@@ -77,27 +154,38 @@ def get_dropdown_options():
     
     country_options = [''] + sorted(country_list)
     
-    return {
+    options = {
         'type1': type1_options,
         'type2': type2_options,
         'type3': type3_options,
         'countries': country_options
     }
-
-
-@st.cache_resource(ttl=3600)  # 1 hour - fuzzy matcher is expensive to build
-def get_fitted_matcher_cached(institutions_hash: str):
-    """
-    Cache the fitted fuzzy matcher
-    Rebuilds every hour or when institution count changes
     
-    Args:
-        institutions_hash: Hash of institutions (typically the count) for cache key
+    # Save to disk cache
+    disk_cache.save("dropdown_options", options, ttl_hours=24)
+    
+    return options
+
+@st.cache_resource(ttl=86400, show_spinner=False, max_entries=1) 
+def get_fitted_matcher_cached():
+    """
+    Cache the fitted fuzzy matcher with disk persistence
+    Rebuilds every 24 hours - removed hash dependency for performance
     
     Returns:
         Fitted matcher object
     """
-    from utils.fuzzy_matching import get_fitted_matcher
+    # Try disk cache first
+    matcher = disk_cache.load("fuzzy_matcher")
+    if matcher is not None:
+        return matcher
     
+    # Build new matcher
+    from utils.fuzzy_matching import get_fitted_matcher
     existing_institutions = get_all_institutions_cached()
-    return get_fitted_matcher(existing_institutions, threshold=0.85)
+    matcher = get_fitted_matcher(existing_institutions, threshold=0.85)
+    
+    # Save to disk cache
+    disk_cache.save("fuzzy_matcher", matcher, ttl_hours=24)
+    
+    return matcher

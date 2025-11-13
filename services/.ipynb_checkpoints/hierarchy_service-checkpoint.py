@@ -47,7 +47,7 @@ class HierarchyService:
         
         # Then try fuzzy matching
         try:
-            matcher = get_fitted_matcher(existing_institutions, threshold=0.6)
+            matcher = get_fitted_matcher()
             fuzzy_matches = matcher.find_similar_institutions(
                 query=query,
                 institution_df=existing_institutions,
