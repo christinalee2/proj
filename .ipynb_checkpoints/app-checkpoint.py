@@ -8,7 +8,9 @@ import os
 
 from table_configs import get_available_tables, get_table_display_names, get_table_config
 
+# Use optimized cached queries for better Docker performance
 from database.cached_queries import get_table_data_cached
+from database.cached_services import OptimizedServices  # Add optimized services
 from services.nzft_matching import render_nzft_page, reset_nzft_session
 
 
@@ -122,31 +124,58 @@ user = st.user
 
         
 def initialize_session_state():
-    """Initialize all session state at once to reduce overhead"""
+    """Initialize all session state at once with optimized loading"""
     defaults = {
         'current_page': 'Upload New Data',
         'username': 'analyst',
         'selected_table': 'institution',
         'auth_attempted': False,
-
-
         'form_data': {},
         'search_results': None,
         'validation_results': None,
-        'institutions_loaded': False,
-        'dropdown_options_loaded': False,
-        'fuzzy_matcher_loaded': False,
+        
+        # Optimized caching flags
+        'app_initialized': False,
+        'heavy_data_loaded': False,
+        'services_initialized': False,
+        
         'show_search_section': False,
         'show_validation_section': False,
         'last_search_query': '',
-        'matcher_cache': None,
-        'institutions_cache': None
+        
+        # Form state persistence
+        'form_institution_name': '',
+        'form_type1': '',
+        'form_type2': '',
+        'form_type3': '',
+        'form_country_sub': '',
+        'form_country_parent': '',
+        'form_comments': '',
     }
     
     # Batch update session state - only set if not already present
     for key, value in defaults.items():
         if key not in st.session_state:
             st.session_state[key] = value
+
+def load_heavy_data_once():
+    """Load heavy data once per session to avoid repeated DB calls"""
+    if not st.session_state.heavy_data_loaded:
+        with st.spinner("Loading application data (one-time per session)..."):
+            # Pre-load institutions and countries to cache them
+            from database.cached_queries import get_all_institutions_cached, get_countries_cached, get_dropdown_options
+            
+            # These calls will cache the data in session state
+            get_all_institutions_cached()
+            get_countries_cached() 
+            get_dropdown_options()
+            
+            # Initialize optimized services
+            OptimizedServices.get_query_service()
+            OptimizedServices.get_institution_service()
+            
+            st.session_state.heavy_data_loaded = True
+            st.session_state.services_initialized = True
 
 
 
@@ -228,25 +257,53 @@ def render_sidebar():
 
 @st.fragment  
 def render_cache_controls_fragment():
-    """Fragment for cache controls - called inside sidebar context"""
+    """Optimized cache controls - clears session state instead of disk"""
     st.subheader("Cache Management")
     col1, col2 = st.columns(2)
     
     with col1:
         if st.button("🔄 Clear Data Cache", help="Clear cached table data", use_container_width=True):
+            # Clear both streamlit cache and session state caches
             st.cache_data.clear()
-            keys_to_clear = [key for key in st.session_state.keys() if key.endswith('_reference_data')]
+            
+            # Clear optimized session state caches
+            cache_keys = [
+                'institutions_cache_data', 'institutions_cache_time',
+                'countries_cache_data', 'countries_cache_time', 
+                'dropdown_options_cache', 'session_cache'
+            ]
+            for key in cache_keys:
+                if key in st.session_state:
+                    del st.session_state[key]
+            
+            # Clear table-specific caches
+            keys_to_clear = [key for key in st.session_state.keys() 
+                           if key.startswith('table_data_') or key.endswith('_reference_data')]
             for key in keys_to_clear:
                 del st.session_state[key]
+            
+            # Reset loading flags to force reload
+            st.session_state.heavy_data_loaded = False
+            st.session_state.services_initialized = False
+            
             st.success("Data cache cleared!")
     
     with col2:
-        if st.button("🔄 Clear All", help="Clear all caches", use_container_width=True):
+        if st.button("🔄 Clear All", help="Clear all caches and restart", use_container_width=True):
+            # Clear everything
             st.cache_data.clear()
             st.cache_resource.clear()
+            
+            # Clear session state services
+            service_keys = ['query_service', 'institution_service', 'lookup_service']
+            for key in service_keys:
+                if key in st.session_state:
+                    del st.session_state[key]
+            
             keys_to_clear = [key for key in st.session_state.keys() if key.endswith('_reference_data')]
             for key in keys_to_clear:
                 del st.session_state[key]
+            
             st.success("All caches cleared!")
     
     # Add NZFT reset button
@@ -257,8 +314,20 @@ def render_cache_controls_fragment():
             reset_nzft_session()
             st.success("NZFT session reset!")
     
-    st.caption("Data cached for 2-4 hours")
-    st.caption("Services cached indefinitely")
+    # Show cache status for debugging
+    if st.checkbox("Cache Status", value=False):
+        cache_info = {
+            'institutions_cached': 'institutions_cache_data' in st.session_state,
+            'countries_cached': 'countries_cache_data' in st.session_state,
+            'dropdown_options_cached': 'dropdown_options_cache' in st.session_state,
+            'services_initialized': st.session_state.get('services_initialized', False),
+            'heavy_data_loaded': st.session_state.get('heavy_data_loaded', False),
+            'session_keys': len(st.session_state.keys())
+        }
+        st.json(cache_info)
+    
+    st.caption("Session-based caching for Docker performance")
+    st.caption("Data refreshes every 24 hours")
 
     
 
@@ -503,11 +572,12 @@ def render_view_tables_page():
 
 
 def main():
-    """Main application entry point with optimizations"""
+    """Main application entry point with Docker-optimized performance"""
     
     # Initialize session state only once
     if 'app_initialized' not in st.session_state:
         initialize_session_state()
+        load_heavy_data_once()  # Load heavy data once per session
         st.session_state.app_initialized = True
     
     page = render_sidebar()
@@ -523,4 +593,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

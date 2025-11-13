@@ -5,126 +5,145 @@ import os
 from datetime import datetime, timedelta
 from database.queries import QueryService
 
-# Enhanced disk caching for Docker persistence
-class DiskCache:
-    def __init__(self, cache_dir="/tmp/streamlit_cache"):
-        self.cache_dir = cache_dir
-        os.makedirs(cache_dir, exist_ok=True)
+# Optimized session-based caching for Docker performance
+class SessionCache:
+    """Session-based cache that doesn't rely on disk I/O - much faster in Docker"""
+    
+    def __init__(self):
+        self._init_cache()
+    
+    def _init_cache(self):
+        if 'session_cache' not in st.session_state:
+            st.session_state.session_cache = {
+                'data': {},
+                'timestamps': {},
+                'ttl_hours': {}
+            }
     
     def save(self, key, data, ttl_hours=24):
-        """Save data to disk with TTL"""
+        """Save data to session state with TTL"""
         try:
-            cache_file = os.path.join(self.cache_dir, f"{key}.pkl")
-            expiry = datetime.now() + timedelta(hours=ttl_hours)
-            cache_data = {'data': data, 'expiry': expiry}
-            with open(cache_file, 'wb') as f:
-                pickle.dump(cache_data, f)
+            self._init_cache()
+            st.session_state.session_cache['data'][key] = data
+            st.session_state.session_cache['timestamps'][key] = datetime.now()
+            st.session_state.session_cache['ttl_hours'][key] = ttl_hours
         except Exception as e:
-            print(f"Error saving to disk cache: {e}")
+            print(f"Error saving to session cache: {e}")
     
     def load(self, key):
-        """Load data from disk if not expired"""
+        """Load data from session state if not expired"""
         try:
-            cache_file = os.path.join(self.cache_dir, f"{key}.pkl")
-            if not os.path.exists(cache_file):
+            self._init_cache()
+            cache = st.session_state.session_cache
+            
+            if key not in cache['data']:
                 return None
             
-            with open(cache_file, 'rb') as f:
-                cache_data = pickle.load(f)
+            timestamp = cache['timestamps'].get(key)
+            ttl_hours = cache['ttl_hours'].get(key, 24)
             
-            if datetime.now() > cache_data['expiry']:
-                os.remove(cache_file)
+            if timestamp and datetime.now() - timestamp > timedelta(hours=ttl_hours):
+                # Data expired, remove it
+                for cache_dict in cache.values():
+                    if key in cache_dict:
+                        del cache_dict[key]
                 return None
             
-            return cache_data['data']
+            return cache['data'][key]
         except Exception as e:
-            print(f"Error loading from disk cache: {e}")
+            print(f"Error loading from session cache: {e}")
             return None
 
-# Global cache instance
-disk_cache = DiskCache()
+# Global cache instance - drop-in replacement for disk_cache
+disk_cache = SessionCache()
 
-@st.cache_data(ttl=86400, show_spinner=False, max_entries=1)  # 24 hours, no spinner
+@st.cache_data(ttl=86400, show_spinner=False, max_entries=1)
 def get_all_institutions_cached():
     """
-    Cached version of get_all_institutions with disk persistence
-    Returns all institutions from the database
-    Cache expires after 24 hours
+    Session-optimized institutions cache - loads once per session
+    Much faster than disk cache in Docker
     """
-    # Try disk cache first
-    data = disk_cache.load("institutions_data")
-    if data is not None:
-        return data
+    # Check session state first - persistent across interactions
+    if 'institutions_cache_data' in st.session_state:
+        if 'institutions_cache_time' in st.session_state:
+            cache_time = st.session_state.institutions_cache_time
+            if datetime.now() - cache_time < timedelta(hours=24):
+                return st.session_state.institutions_cache_data
     
-    # Load from database if not in disk cache
+    # Load from database if not cached or expired
     service = QueryService()
     data = service.get_all_institutions()
     
-    # Save to disk cache
-    disk_cache.save("institutions_data", data, ttl_hours=24)
+    # Store in session state for persistence
+    st.session_state.institutions_cache_data = data
+    st.session_state.institutions_cache_time = datetime.now()
     
     return data
 
-@st.cache_data(ttl=86400, show_spinner=False)  # 24 hours, no spinner  
+@st.cache_data(ttl=86400, show_spinner=False)
 def get_table_data_cached(table_name: str, limit: int = None) -> pd.DataFrame:
-    """Get cached table data for any table with disk persistence"""
+    """Session-optimized table data cache"""
     cache_key = f"table_data_{table_name}_{limit or 'all'}"
     
-    # Try disk cache first
-    data = disk_cache.load(cache_key)
-    if data is not None:
-        return data
+    # Check session state first
+    if cache_key in st.session_state:
+        cache_entry = st.session_state[cache_key]
+        if isinstance(cache_entry, dict) and 'data' in cache_entry and 'timestamp' in cache_entry:
+            if datetime.now() - cache_entry['timestamp'] < timedelta(hours=4):
+                return cache_entry['data']
     
     # Load from database
     from database.queries import QueryService
     data = QueryService.get_table_data(table_name, limit)
     
-    # Save to disk cache
-    disk_cache.save(cache_key, data, ttl_hours=24)
+    # Cache in session state
+    st.session_state[cache_key] = {
+        'data': data,
+        'timestamp': datetime.now()
+    }
     
     return data
 
-@st.cache_data(ttl=86400, show_spinner=False) 
+@st.cache_data(ttl=86400, show_spinner=False)
 def get_countries_cached():
-    """
-    Cached version of get_countries with disk persistence
-    Returns all countries from geography table
-    Cache expires after 24 hours
-    """
-    # Try disk cache first
-    data = disk_cache.load("countries_data")
-    if data is not None:
-        return data
+    """Session-optimized countries cache"""
+    # Check session state first
+    if 'countries_cache_data' in st.session_state:
+        if 'countries_cache_time' in st.session_state:
+            cache_time = st.session_state.countries_cache_time
+            if datetime.now() - cache_time < timedelta(hours=24):
+                return st.session_state.countries_cache_data
     
     # Load from database
     service = QueryService()
     data = service.get_countries()
     
-    # Save to disk cache
-    disk_cache.save("countries_data", data, ttl_hours=24)
+    # Store in session state
+    st.session_state.countries_cache_data = data
+    st.session_state.countries_cache_time = datetime.now()
     
     return data
 
-@st.cache_data(ttl=86400, show_spinner=False)  # 24 hours - dropdown options don't change often
+@st.cache_data(ttl=86400, show_spinner=False)
 def get_dropdown_options():
     """
-    Load and cache all dropdown options at once with disk persistence
+    Session-optimized dropdown options cache
     Returns dictionary with all dropdown option lists
-    
-    Returns:
-        Dict with keys: type1, type2, type3, countries
     """
-    # Try disk cache first
-    options = disk_cache.load("dropdown_options")
-    if options is not None:
-        return options
+    # Check session state first for fast access
+    if 'dropdown_options_cache' in st.session_state:
+        cache_entry = st.session_state.dropdown_options_cache
+        if isinstance(cache_entry, dict) and 'timestamp' in cache_entry:
+            if datetime.now() - cache_entry['timestamp'] < timedelta(hours=24):
+                return cache_entry['options']
     
-    # Build options fresh
+    # Build options fresh using cached data (avoid new DB calls)
     existing_insts = get_all_institutions_cached()
     countries_df = get_countries_cached()
     
     country_list = countries_df['country_cpi'].tolist() if not countries_df.empty else []
     
+    # Base options
     type1_options = ['', 'Public', 'Private']
     type2_options = ['', 'Funds', 'Corporation', 'Commercial FI', 'Government', 
                      'Institutional Investors', 'Bilateral DFI', 'SOE', 
@@ -140,17 +159,14 @@ def get_dropdown_options():
     
     # Merge with existing values from database
     if not existing_insts.empty:
-        if 'institution_type_layer1' in existing_insts.columns:
-            db_values = existing_insts['institution_type_layer1'].dropna().unique().tolist()
-            type1_options = [''] + sorted(set(type1_options[1:] + db_values))
-        
-        if 'institution_type_layer2' in existing_insts.columns:
-            db_values = existing_insts['institution_type_layer2'].dropna().unique().tolist()
-            type2_options = [''] + sorted(set(type2_options[1:] + db_values))
-        
-        if 'institution_type_layer3' in existing_insts.columns:
-            db_values = existing_insts['institution_type_layer3'].dropna().unique().tolist()
-            type3_options = [''] + sorted(set(type3_options[1:] + db_values))
+        for col, options in [
+            ('institution_type_layer1', type1_options),
+            ('institution_type_layer2', type2_options),
+            ('institution_type_layer3', type3_options)
+        ]:
+            if col in existing_insts.columns:
+                db_values = existing_insts[col].dropna().unique().tolist()
+                options[1:] = sorted(set(options[1:] + db_values))
     
     country_options = [''] + sorted(country_list)
     
@@ -161,8 +177,11 @@ def get_dropdown_options():
         'countries': country_options
     }
     
-    # Save to disk cache
-    disk_cache.save("dropdown_options", options, ttl_hours=24)
+    # Cache in session state
+    st.session_state.dropdown_options_cache = {
+        'options': options,
+        'timestamp': datetime.now()
+    }
     
     return options
 

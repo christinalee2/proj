@@ -16,6 +16,7 @@ import time
 from config import CURRENT_YEAR, should_auto_populate_year, get_audit_data, AUDIT_FIELDS
 from services.hierarchy_service import HierarchyService
 from ui.hierarchy_ui import render_hierarchy_options_for_duplicates, render_hierarchy_options_for_fuzzy_matches, render_new_institution_hierarchy_option, render_institution_search_widget
+from database.cached_services import OptimizedServices
 
 
 @dataclass
