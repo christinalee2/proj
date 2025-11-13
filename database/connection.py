@@ -9,9 +9,6 @@ from table_configs import get_column_type_config, get_table_id_column
 import os
 import traceback
 import io
-import time
-import threading
-from contextlib import contextmanager
 
 ##########################
 #Generally there's AWS wrangler inserts that are faster and better - and then there are also inserts from my original implementation that rewrite the whole parquet file with the new entry if wrangler fails for some reason. These functions are labeled ORIGINAL VERSION but shouldn't ever really be running, just kept as a fallback
@@ -23,67 +20,6 @@ try:
 except ImportError:
     HAS_WRANGLER = False
     print("WARNING: awswrangler not available, falling back to original insert method")
-
-
-class ConnectionManager:
-    """Manages database connections with connection pooling for Docker performance"""
-    
-    def __init__(self):
-        self._connection = None
-        self._connection_time = None
-        self._lock = threading.Lock()
-        self._connection_ttl = 3600  # 1 hour connection lifetime
-    
-    def _create_connection(self):
-        """Create a new database connection"""
-        try:
-            return connect(
-                s3_staging_dir=ATHENA_OUTPUT_LOCATION,
-                region_name=AWS_REGION,
-                cursor_class=Cursor
-            )
-        except Exception as e:
-            print(f"Error creating database connection: {e}")
-            return None
-    
-    @contextmanager
-    def get_connection(self):
-        """Get a reusable database connection"""
-        with self._lock:
-            # Check if connection is valid and not expired
-            if (self._connection is None or 
-                self._connection_time is None or 
-                time.time() - self._connection_time > self._connection_ttl):
-                
-                # Close old connection if exists
-                if self._connection:
-                    try:
-                        self._connection.close()
-                    except:
-                        pass
-                
-                # Create new connection
-                self._connection = self._create_connection()
-                self._connection_time = time.time()
-            
-            if self._connection is None:
-                raise Exception("Failed to create database connection")
-            
-            try:
-                yield self._connection
-            except Exception as e:
-                # Connection might be bad, reset it
-                self._connection = None
-                self._connection_time = None
-                raise e
-
-# Global connection manager instance
-connection_manager = ConnectionManager()
-
-@st.cache_resource
-def get_connection_manager():
-    """Get cached connection manager"""
-    return ConnectionManager()
 
 
 def get_next_id_for_table(existing_df, table_name):
@@ -166,9 +102,14 @@ class DatabaseConnection:
     
     @classmethod
     def get_connection(cls) -> Cursor:
-        """Get a pooled database connection for better Docker performance"""
-        # Use the global connection manager instead of creating new connections
-        return get_connection_manager().get_connection()
+        """Get or create a database connection """
+        if cls._connection is None:
+            cls._connection = connect(
+                region_name=AWS_REGION,
+                s3_staging_dir=ATHENA_OUTPUT_LOCATION,
+                schema_name=ATHENA_DATABASE
+            )
+        return cls._connection
 
 
 
