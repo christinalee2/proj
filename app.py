@@ -7,7 +7,6 @@ import os
 
 from table_configs import get_available_tables, get_table_display_names, get_table_config
 from database.cached_queries import preload_critical_data, clear_all_data_cache
-from services.cached_services import clear_all_services
 from services.nzft_matching import render_nzft_page, reset_nzft_session
 
 load_dotenv()
