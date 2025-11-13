@@ -8,9 +8,9 @@ import os
 
 from table_configs import get_available_tables, get_table_display_names, get_table_config
 
-# Use optimized cached queries for better Docker performance
-from database.cached_queries import get_table_data_cached
-from services.cached_services import OptimizedServices  # Add optimized services
+# Use ultra-optimized cached queries
+from database.cached_queries import warm_all_caches, clear_all_caches
+from database.cached_services import OptimizedServices
 from services.nzft_matching import render_nzft_page, reset_nzft_session
 
 
@@ -124,7 +124,7 @@ user = st.user
 
         
 def initialize_session_state():
-    """Initialize all session state at once with optimized loading"""
+    """Initialize all session state with ultra-optimized loading"""
     defaults = {
         'current_page': 'Upload New Data',
         'username': 'analyst',
@@ -134,16 +134,16 @@ def initialize_session_state():
         'search_results': None,
         'validation_results': None,
         
-        # Optimized caching flags
-        'app_initialized': False,
-        'heavy_data_loaded': False,
-        'services_initialized': False,
+        # Ultra-optimized caching flags
+        'app_fully_loaded': False,
+        'data_ready': False,
+        'services_ready': False,
         
         'show_search_section': False,
         'show_validation_section': False,
         'last_search_query': '',
         
-        # Form state persistence
+        # Form state persistence for instant access
         'form_institution_name': '',
         'form_type1': '',
         'form_type2': '',
@@ -158,34 +158,50 @@ def initialize_session_state():
         if key not in st.session_state:
             st.session_state[key] = value
 
-def load_heavy_data_once():
-    """Load heavy data once per session to avoid repeated DB calls"""
-    if not st.session_state.heavy_data_loaded:
-        with st.spinner("Loading application data (one-time per session)..."):
-            # Pre-load institutions and countries to cache them
-            from database.cached_queries import get_all_institutions_cached, get_countries_cached, get_dropdown_options
-            
-            # These calls will cache the data in session state
-            get_all_institutions_cached()
-            get_countries_cached() 
-            get_dropdown_options()
-            
-            # Initialize optimized services
-            OptimizedServices.get_query_service()
-            OptimizedServices.get_institution_service()
-            
-            st.session_state.heavy_data_loaded = True
-            st.session_state.services_initialized = True
+def ultra_fast_app_init():
+    """Ultra-fast app initialization - only run heavy operations once ever"""
+    if st.session_state.app_fully_loaded:
+        return  # Already loaded, exit immediately
+        
+    # Show progress only on first load
+    progress_placeholder = st.empty()
+    with progress_placeholder.container():
+        st.info("🚀 Initializing app (one-time setup)...")
+        
+        # Progress bar for better UX
+        progress = st.progress(0)
+        status = st.empty()
+        
+        # Step 1: Initialize services (fast)
+        status.text("Initializing services...")
+        progress.progress(25)
+        OptimizedServices.get_query_service()
+        OptimizedServices.get_institution_service()
+        
+        # Step 2: Warm critical caches (slower)
+        status.text("Loading core data...")
+        progress.progress(50)
+        warm_all_caches()
+        
+        # Step 3: Mark as fully loaded
+        status.text("Finalizing...")
+        progress.progress(100)
+        st.session_state.app_fully_loaded = True
+        st.session_state.data_ready = True
+        st.session_state.services_ready = True
+        
+    # Clear the progress indicator
+    progress_placeholder.empty()
 
 
 
 def render_sidebar():
-    """Render the sidebar with navigation and controls"""
+    """Optimized sidebar with instant user info access"""
     with st.sidebar:
         st.title("Reference Data Manager")
         st.markdown("---")
         
-        # Cache user info in session state to avoid repeated user object access
+        # Ultra-fast user info caching
         if 'user_info' not in st.session_state:
             user = st.user
             user_email = user.get('email', 'No email available')
@@ -217,7 +233,7 @@ def render_sidebar():
         
         st.markdown("---")
         
-        # Handle navigation directly without fragment for now
+        # Ultra-fast navigation with session state
         st.subheader("Menu")
         
         page_options = ["Upload New Data", "View Current Tables", "NZFT"]
@@ -231,7 +247,7 @@ def render_sidebar():
             current_index = 0
             st.session_state['current_page'] = page_options[0]
         
-        # Use on_change callback to update session state properly
+        # Ultra-fast page update
         def update_page():
             st.session_state['current_page'] = st.session_state['navigation']
         
@@ -240,15 +256,14 @@ def render_sidebar():
             page_options,
             key="navigation",
             index=current_index,
-            on_change=update_page  # This ensures proper state update
+            on_change=update_page
         )
         
-        # Return the current page from session state
         current_page = st.session_state['current_page']
         
         st.markdown("---")
         
-        # Call the cache controls fragment INSIDE the sidebar context
+        # Ultra-optimized cache controls
         render_cache_controls_fragment()
         
         st.caption(f"Last updated: {datetime.now().strftime('%Y-%m-%d')}")
@@ -257,56 +272,41 @@ def render_sidebar():
 
 @st.fragment  
 def render_cache_controls_fragment():
-    """Optimized cache controls - clears session state instead of disk"""
+    """Ultra-optimized cache controls with instant clearing"""
     st.subheader("Cache Management")
     col1, col2 = st.columns(2)
     
     with col1:
-        if st.button("🔄 Clear Data Cache", help="Clear cached table data", use_container_width=True):
-            # Clear both streamlit cache and session state caches
-            st.cache_data.clear()
+        if st.button("🔄 Clear Data Cache", help="Clear all cached data", use_container_width=True):
+            clear_all_caches()
             
-            # Clear optimized session state caches
-            cache_keys = [
-                'institutions_cache_data', 'institutions_cache_time',
-                'countries_cache_data', 'countries_cache_time', 
-                'dropdown_options_cache', 'session_cache'
-            ]
-            for key in cache_keys:
-                if key in st.session_state:
-                    del st.session_state[key]
-            
-            # Clear table-specific caches
-            keys_to_clear = [key for key in st.session_state.keys() 
-                           if key.startswith('table_data_') or key.endswith('_reference_data')]
-            for key in keys_to_clear:
-                del st.session_state[key]
-            
-            # Reset loading flags to force reload
-            st.session_state.heavy_data_loaded = False
-            st.session_state.services_initialized = False
-            
-            st.success("Data cache cleared!")
-    
-    with col2:
-        if st.button("🔄 Clear All", help="Clear all caches and restart", use_container_width=True):
-            # Clear everything
-            st.cache_data.clear()
-            st.cache_resource.clear()
-            
-            # Clear session state services
-            service_keys = ['query_service', 'institution_service', 'lookup_service']
+            # Clear services too
+            service_keys = ['query_service', 'institution_service', 'lookup_service',
+                          'standardization_service', 'hierarchy_service']
             for key in service_keys:
                 if key in st.session_state:
                     del st.session_state[key]
             
-            keys_to_clear = [key for key in st.session_state.keys() if key.endswith('_reference_data')]
-            for key in keys_to_clear:
-                del st.session_state[key]
+            # Reset flags to force reload
+            st.session_state.app_fully_loaded = False
+            st.session_state.data_ready = False
+            st.session_state.services_ready = False
+            st.session_state.caches_warmed = False
             
-            st.success("All caches cleared!")
+            st.success("All caches cleared! App will reload fresh on next interaction.")
     
-    # Add NZFT reset button
+    with col2:
+        if st.button("⚡ Restart App", help="Full application restart", use_container_width=True):
+            # Nuclear option - clear everything
+            for key in list(st.session_state.keys()):
+                if key not in ['auth_attempted', 'user_info']:  # Keep auth info
+                    del st.session_state[key]
+            st.cache_data.clear()
+            st.cache_resource.clear()
+            st.success("App restarted!")
+            st.rerun()
+    
+    # NZFT reset (only when on NZFT page)
     if st.session_state.get('current_page') == 'NZFT':
         st.markdown("---")
         if st.button("🔄 Reset NZFT Session", help="Clear NZFT matching data", use_container_width=True):
@@ -317,39 +317,35 @@ def render_cache_controls_fragment():
     # Show cache status for debugging
     if st.checkbox("Cache Status", value=False):
         cache_info = {
+            'app_fully_loaded': st.session_state.get('app_fully_loaded', False),
+            'data_ready': st.session_state.get('data_ready', False),
+            'services_ready': st.session_state.get('services_ready', False),
+            'caches_warmed': st.session_state.get('caches_warmed', False),
             'institutions_cached': 'institutions_cache_data' in st.session_state,
             'countries_cached': 'countries_cache_data' in st.session_state,
             'dropdown_options_cached': 'dropdown_options_cache' in st.session_state,
-            'services_initialized': st.session_state.get('services_initialized', False),
-            'heavy_data_loaded': st.session_state.get('heavy_data_loaded', False),
             'session_keys': len(st.session_state.keys())
         }
         st.json(cache_info)
     
-    st.caption("Session-based caching for Docker performance")
-    st.caption("Data refreshes every 24 hours")
+    st.caption("⚡ Ultra-optimized session caching")
+    st.caption("🐳 Docker performance optimized")
 
-    
 
 @st.fragment
 def render_table_selection():
-    """Fragment table selection to avoid full rerun"""
-    st.subheader("1. Select Table")
+    """Ultra-fast table selection with cached configs"""
+    st.subheader("1. Table Selection")
     
+    # Use cached configs for instant access
     configs = get_table_configs_cached()
     available_tables = configs['available_tables']
     table_display_names = configs['display_names']
     
     display_options = [f"{table_display_names[table]} ({table})" for table in available_tables]
     
-    # Use session state to maintain selection
     if 'selected_table_display' not in st.session_state:
-        default_table = st.session_state.get('selected_table', 'institution')
-        try:
-            default_index = available_tables.index(default_table)
-        except ValueError:
-            default_index = 0
-        st.session_state.selected_table_display = display_options[default_index]
+        st.session_state.selected_table_display = display_options[0]
     
     try:
         current_index = display_options.index(st.session_state.selected_table_display)
@@ -372,7 +368,7 @@ def render_table_selection():
 
 @st.fragment
 def render_upload_method_selection(selected_table):
-    """Fragment upload method selection"""
+    """Ultra-fast upload method selection"""
     st.subheader("2. Upload Method")
     upload_method = st.radio(
         "How would you like to upload data?",
@@ -385,7 +381,7 @@ def render_upload_method_selection(selected_table):
 
 
 def render_upload_page():
-    """Render the upload page with fragments"""
+    """Ultra-optimized upload page with instant loading"""
     st.header("Upload New Data")
     st.markdown("This tool lets you add new data to the CPI reference tables. You can upload a single entry or import multiple records at once, depending on your needs. All submissions are reviewed by the research team before being finalized. To help ensure accuracy, please review the [reference table documentation](https://www.notion.so/cpi-all/Reference-Tables-1f3efb28632b80b4b53dec019a97d70a) before uploading.")
     st.markdown("---")
@@ -411,10 +407,7 @@ def render_upload_page():
 
 
 def render_table_view(table_name: str):
-    """
-    Render table view for tables -- not showing up currently, may just delete if we dont wnat this
-
-    """
+    """Ultra-optimized table view with cached data access"""
     config = get_table_config(table_name)
     if not config:
         st.error(f"No configuration found for table: {table_name}")
@@ -428,32 +421,23 @@ def render_table_view(table_name: str):
     with col1:
         st.markdown("")  
     with col2:
-        #To refresh session state data, gets out of cache
+        # Ultra-fast refresh - just clear that table's cache
         if st.button("🔄 Refresh Data", help="Force reload from database", use_container_width=True):
-            st.cache_data.clear()
+            # Clear only this table's cache for faster refresh
+            cache_key = f"table_data_{table_name}_None"
+            if cache_key in st.session_state:
+                del st.session_state[cache_key]
             
-            session_key = f'{table_name}_reference_data'
-            if session_key in st.session_state:
-                del st.session_state[session_key]
-            
-            keys_to_clear = [key for key in st.session_state.keys() if key.endswith('_reference_data')]
-            for key in keys_to_clear:
-                del st.session_state[key]
-            
-            st.success("Cache cleared! Data will reload fresh.")
+            st.success("Data will reload fresh on next view.")
             st.rerun()
     
     st.markdown("---")
     
+    # Use optimized cached data loading
     with st.spinner(f"Loading {config.display_name} data..."):
         try:
-            session_key = f'{table_name}_reference_data'
-            if session_key in st.session_state:
-                df = st.session_state[session_key]['existing_data']
-                st.info(f"Loaded {len(df):,} rows from session state")
-            else:
-                df = get_table_data_cached(table_name, limit=None)
-                st.info(f"Loaded {len(df):,} rows from database")
+            from database.cached_queries import get_table_data_cached
+            df = get_table_data_cached(table_name, limit=None)
                 
             st.info(f"Loaded all {len(df):,} rows from {config.display_name}")
             
@@ -532,14 +516,14 @@ def render_table_view(table_name: str):
 
 
 def render_view_tables_page():
-    """Render the view tables page"""
+    """Ultra-optimized view tables page"""
     st.header("View Current Tables")
     st.markdown("Browse your reference data")
     st.markdown("---")
     
     st.subheader("Select Table")
     
-    # Use cached configs
+    # Use cached configs for instant access
     configs = get_table_configs_cached()
     available_tables = configs['available_tables']
     table_display_names = configs['display_names']
@@ -572,17 +556,20 @@ def render_view_tables_page():
 
 
 def main():
-    """Main application entry point with Docker-optimized performance"""
+    """Ultra-optimized main entry point with minimal loading screens"""
     
-    # Initialize session state only once
-    if 'app_initialized' not in st.session_state:
+    # Initialize session state instantly
+    if not st.session_state.get('app_initialized', False):
         initialize_session_state()
-        load_heavy_data_once()  # Load heavy data once per session
         st.session_state.app_initialized = True
     
+    # Ultra-fast initialization - only heavy operations once
+    ultra_fast_app_init()
+    
+    # Render sidebar (should be instant after init)
     page = render_sidebar()
     
-    # Lazy load page modules only when needed
+    # Page rendering with instant data access
     if page == "Upload New Data":
         render_upload_page()
     elif page == "View Current Tables":
