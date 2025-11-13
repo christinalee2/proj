@@ -4,93 +4,87 @@ from datetime import datetime, timedelta
 from database.queries import QueryService
 
 
+# Simple, fast session-state only caching - no decorators, no conflicts
+
 def get_all_institutions_cached():
-    """
-    Ultra-optimized institutions cache - session state only, no @st.cache_data conflicts
-    """
-    # Check session state first - persistent across interactions
-    if 'institutions_cache_data' in st.session_state:
-        if 'institutions_cache_time' in st.session_state:
-            cache_time = st.session_state.institutions_cache_time
-            if datetime.now() - cache_time < timedelta(hours=24):
-                return st.session_state.institutions_cache_data
+    """Simple session state caching - fast in Docker"""
+    cache_key = 'institutions_data_cache'
+    time_key = 'institutions_time_cache'
     
-    # Load from database if not cached or expired
-    print("Loading institutions from database (should only happen once per session)")
+    # Check if data exists and is fresh (within 24 hours)
+    if cache_key in st.session_state and time_key in st.session_state:
+        if datetime.now() - st.session_state[time_key] < timedelta(hours=24):
+            return st.session_state[cache_key]
+    
+    # Load fresh data
     service = QueryService()
     data = service.get_all_institutions()
     
-    # Store in session state for persistence
-    st.session_state.institutions_cache_data = data
-    st.session_state.institutions_cache_time = datetime.now()
+    # Cache in session state
+    st.session_state[cache_key] = data
+    st.session_state[time_key] = datetime.now()
     
     return data
 
 
 def get_table_data_cached(table_name: str, limit: int = None) -> pd.DataFrame:
-    """Ultra-optimized table data cache - session state only"""
-    cache_key = f"table_data_{table_name}_{limit or 'all'}"
+    """Simple session state caching for any table"""
+    cache_key = f"table_{table_name}_{limit}"
+    time_key = f"table_{table_name}_{limit}_time"
     
-    # Check session state first
-    if cache_key in st.session_state:
-        cache_entry = st.session_state[cache_key]
-        if isinstance(cache_entry, dict) and 'data' in cache_entry and 'timestamp' in cache_entry:
-            if datetime.now() - cache_entry['timestamp'] < timedelta(hours=4):
-                return cache_entry['data']
+    # Check if data exists and is fresh (within 4 hours)
+    if cache_key in st.session_state and time_key in st.session_state:
+        if datetime.now() - st.session_state[time_key] < timedelta(hours=4):
+            return st.session_state[cache_key]
     
-    # Load from database
-    print(f"Loading {table_name} from database (should be rare)")
+    # Load fresh data
     from database.queries import QueryService
     data = QueryService.get_table_data(table_name, limit)
     
     # Cache in session state
-    st.session_state[cache_key] = {
-        'data': data,
-        'timestamp': datetime.now()
-    }
+    st.session_state[cache_key] = data
+    st.session_state[time_key] = datetime.now()
     
     return data
 
 
 def get_countries_cached():
-    """Ultra-optimized countries cache - session state only"""
-    # Check session state first
-    if 'countries_cache_data' in st.session_state:
-        if 'countries_cache_time' in st.session_state:
-            cache_time = st.session_state.countries_cache_time
-            if datetime.now() - cache_time < timedelta(hours=24):
-                return st.session_state.countries_cache_data
+    """Simple session state caching for countries"""
+    cache_key = 'countries_data_cache'
+    time_key = 'countries_time_cache'
     
-    # Load from database
-    print("Loading countries from database (should only happen once per session)")
+    # Check if data exists and is fresh
+    if cache_key in st.session_state and time_key in st.session_state:
+        if datetime.now() - st.session_state[time_key] < timedelta(hours=24):
+            return st.session_state[cache_key]
+    
+    # Load fresh data
     service = QueryService()
     data = service.get_countries()
     
-    # Store in session state
-    st.session_state.countries_cache_data = data
-    st.session_state.countries_cache_time = datetime.now()
+    # Cache in session state  
+    st.session_state[cache_key] = data
+    st.session_state[time_key] = datetime.now()
     
     return data
 
 
 def get_dropdown_options():
-    """
-    Ultra-optimized dropdown options - session state only, builds from cached data
-    """
-    # Check session state first for instant access
-    if 'dropdown_options_cache' in st.session_state:
-        cache_entry = st.session_state.dropdown_options_cache
-        if isinstance(cache_entry, dict) and 'timestamp' in cache_entry:
-            if datetime.now() - cache_entry['timestamp'] < timedelta(hours=24):
-                return cache_entry['options']
+    """Build dropdown options from cached data - no DB calls"""
+    cache_key = 'dropdown_options_cache'
+    time_key = 'dropdown_options_time'
     
-    # Build options fresh using already-cached data (no new DB calls)
+    # Check if options exist and are fresh
+    if cache_key in st.session_state and time_key in st.session_state:
+        if datetime.now() - st.session_state[time_key] < timedelta(hours=24):
+            return st.session_state[cache_key]
+    
+    # Build from cached data (should not hit DB)
     existing_insts = get_all_institutions_cached()
     countries_df = get_countries_cached()
     
     country_list = countries_df['country_cpi'].tolist() if not countries_df.empty else []
     
-    # Base options
     type1_options = ['', 'Public', 'Private']
     type2_options = ['', 'Funds', 'Corporation', 'Commercial FI', 'Government', 
                      'Institutional Investors', 'Bilateral DFI', 'SOE', 
@@ -104,56 +98,50 @@ def get_dropdown_options():
                      'Central Government', 'Asset Manager', 'Insurance Company', 
                      'Government Agencies', 'Bank']
     
-    # Merge with existing values from database
+    # Add DB values if available
     if not existing_insts.empty:
         for col, options in [
             ('institution_type_layer1', type1_options),
-            ('institution_type_layer2', type2_options),
+            ('institution_type_layer2', type2_options), 
             ('institution_type_layer3', type3_options)
         ]:
             if col in existing_insts.columns:
                 db_values = existing_insts[col].dropna().unique().tolist()
                 options[1:] = sorted(set(options[1:] + db_values))
     
-    country_options = [''] + sorted(country_list)
-    
-    options = {
+    result = {
         'type1': type1_options,
         'type2': type2_options,
         'type3': type3_options,
-        'countries': country_options
+        'countries': [''] + sorted(country_list)
     }
     
-    # Cache in session state
-    st.session_state.dropdown_options_cache = {
-        'options': options,
-        'timestamp': datetime.now()
-    }
+    # Cache result
+    st.session_state[cache_key] = result
+    st.session_state[time_key] = datetime.now()
     
-    return options
+    return result
 
 
 def get_fitted_matcher_cached():
-    """
-    Ultra-optimized fuzzy matcher - only load when actually needed
-    """
-    # Check if already loaded in session state
-    if 'fitted_matcher_cache' in st.session_state:
-        if 'fitted_matcher_time' in st.session_state:
-            cache_time = st.session_state.fitted_matcher_time
-            if datetime.now() - cache_time < timedelta(hours=24):
-                return st.session_state.fitted_matcher_cache
+    """Only load fuzzy matcher when actually needed"""
+    cache_key = 'fuzzy_matcher_cache'
+    time_key = 'fuzzy_matcher_time'
     
-    print("Building fuzzy matcher (should be rare)")
-    # Build new matcher using already-cached institutions
+    # Check if matcher exists and is fresh
+    if cache_key in st.session_state and time_key in st.session_state:
+        if datetime.now() - st.session_state[time_key] < timedelta(hours=24):
+            return st.session_state[cache_key]
+    
+    # Build matcher from cached institutions
     try:
         from utils.fuzzy_matching import get_fitted_matcher
         existing_institutions = get_all_institutions_cached()
         matcher = get_fitted_matcher(existing_institutions, threshold=0.85)
         
-        # Cache in session state
-        st.session_state.fitted_matcher_cache = matcher
-        st.session_state.fitted_matcher_time = datetime.now()
+        # Cache result
+        st.session_state[cache_key] = matcher
+        st.session_state[time_key] = datetime.now()
         
         return matcher
     except Exception as e:
@@ -161,33 +149,25 @@ def get_fitted_matcher_cached():
         return None
 
 
-def clear_all_caches():
-    """Clear all optimized caches"""
-    cache_keys = [
-        'institutions_cache_data', 'institutions_cache_time',
-        'countries_cache_data', 'countries_cache_time', 
-        'dropdown_options_cache', 'fitted_matcher_cache', 'fitted_matcher_time'
-    ]
-    for key in cache_keys:
-        if key in st.session_state:
-            del st.session_state[key]
+def preload_critical_data():
+    """Preload critical data once per session"""
+    if st.session_state.get('data_preloaded', False):
+        return  # Already loaded
     
-    # Clear table-specific caches
-    keys_to_clear = [key for key in st.session_state.keys() 
-                   if key.startswith('table_data_')]
-    for key in keys_to_clear:
+    # Load critical data
+    get_all_institutions_cached()
+    get_countries_cached()
+    get_dropdown_options()
+    
+    st.session_state.data_preloaded = True
+
+
+def clear_all_data_cache():
+    """Clear all cached data"""
+    keys_to_remove = []
+    for key in st.session_state.keys():
+        if any(x in key for x in ['_cache', '_time', 'data_preloaded']):
+            keys_to_remove.append(key)
+    
+    for key in keys_to_remove:
         del st.session_state[key]
-    
-    print("All caches cleared")
-
-
-def warm_all_caches():
-    """Pre-load all critical data for instant access"""
-    if not st.session_state.get('caches_warmed', False):
-        print("Warming all caches...")
-        get_all_institutions_cached()
-        get_countries_cached()
-        get_dropdown_options()
-        # Don't warm fuzzy matcher - only load when needed
-        st.session_state.caches_warmed = True
-        print("All caches warmed")

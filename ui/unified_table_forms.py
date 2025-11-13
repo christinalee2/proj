@@ -16,7 +16,7 @@ import time
 from config import CURRENT_YEAR, should_auto_populate_year, get_audit_data, AUDIT_FIELDS
 from services.hierarchy_service import HierarchyService
 from ui.hierarchy_ui import render_hierarchy_options_for_duplicates, render_hierarchy_options_for_fuzzy_matches, render_new_institution_hierarchy_option, render_institution_search_widget
-from services.cached_services import OptimizedServices
+# from database.cached_services import OptimizedServices
 
 
 @dataclass
@@ -312,7 +312,7 @@ def create_table_entry(table_name: str, data: Dict[str, Any], user: str = "syste
     
     if table_name == 'institution':
         # Use existing institution service
-        service = OptimizedServices.get_institution_service()
+        service = InstitutionService()
         return service.create_institution(
             institution_name=data.get('institution_cpi', ''),
             institution_type_layer1=data.get('institution_type_layer1'),
@@ -364,7 +364,7 @@ def create_table_entry(table_name: str, data: Dict[str, Any], user: str = "syste
             
             clean_data = {k: v for k, v in clean_data.items() if v is not None}
             
-            query_service = OptimizedServices.get_query_service()
+            query_service = QueryService()
             success = query_service.execute_insert(table_name, clean_data)
             
             if success:
@@ -422,7 +422,7 @@ def create_table_entry(table_name: str, data: Dict[str, Any], user: str = "syste
             
             clean_data = {k: v for k, v in clean_data.items() if v is not None}
             
-            query_service = OptimizedServices.get_query_service()
+            query_service = QueryService()
             success = query_service.execute_insert(table_name, clean_data)
             
             if success:
@@ -638,7 +638,7 @@ def render_unified_single_entry_form(table_name: str):
     primary_field = config.required_fields[0] if config.required_fields else config.fields[0].name
     primary_field_config = next((f for f in config.fields if f.name == primary_field), None)
     
-    standardization_service = OptimizedServices.get_standardization_service()
+    standardization_service = StandardizationService()
     
     if primary_field_config:
                 
@@ -840,7 +840,7 @@ def render_unified_single_entry_form(table_name: str):
                         
                         if child_name and child_id:
                             if st.button("Create Relationship", key="match_submit"):
-                                hierarchy_service = OptimizedServices.get_hierarchy_service()
+                                hierarchy_service = HierarchyService()
                                 result = hierarchy_service.create_hierarchy_entry(
                                     parent_institution=match_name,
                                     child_institution=child_name,
@@ -907,7 +907,7 @@ def render_unified_single_entry_form(table_name: str):
                         
                         if parent_name and parent_id:
                             if st.button("Create Relationship", key="match_child_submit"):
-                                hierarchy_service = OptimizedServices.get_hierarchy_service()
+                                hierarchy_service = HierarchyService()
                                 result = hierarchy_service.create_hierarchy_entry(
                                     parent_institution=parent_name,
                                     child_institution=match_name,
@@ -949,7 +949,7 @@ def render_unified_single_entry_form(table_name: str):
                             if 'country_parent' in existing_data.columns:
                                 valid_countries.update(existing_data['country_parent'].dropna().unique())
                         
-                        lookup_service = OptimizedServices.get_lookup_service()
+                        lookup_service = InstitutionLookupService(valid_countries=list(valid_countries))
                         result = lookup_service.lookup_institution(primary_value)
                         
                         st.session_state['lookup_result'] = result
@@ -1272,7 +1272,7 @@ def render_unified_single_entry_form(table_name: str):
                                     # Calculate what the new ID would be so we don't have to reload/cache insittutions
                                     try:   
                                         max_id_query = "SELECT MAX(id_institution_cpi) as max_id FROM institution"
-                                        max_id_result = OptimizedServices.get_query_service().execute_query(max_id_query)
+                                        max_id_result = QueryService().execute_query(max_id_query)
                                         if not max_id_result.empty and max_id_result.iloc[0]['max_id'] is not None:
                                             new_institution_id = int(max_id_result.iloc[0]['max_id'])
                                         else:
@@ -1282,7 +1282,7 @@ def render_unified_single_entry_form(table_name: str):
                                         new_institution_id = None
                                 
                                 if new_institution_id:
-                                    hierarchy_service = OptimizedServices.get_hierarchy_service()
+                                    hierarchy_service = HierarchyService()
 
                                     if hierarchy_form_data['mode'] == 'new_as_parent':
                                         # New institution is parent, use existing child from search
@@ -1971,7 +1971,7 @@ def run_single_lookup(result: ValidationResult, table_name: str, session_key: st
                 if 'country_parent' in existing_data.columns:
                     valid_countries.update(existing_data['country_parent'].dropna().unique())
             
-            lookup_service = OptimizedServices.get_lookup_service()
+            lookup_service = InstitutionLookupService(valid_countries=list(valid_countries))
             lookup_result = lookup_service.lookup_institution(institution_name)
             
             if f'{session_key}_lookup_results' not in st.session_state:
@@ -2034,7 +2034,7 @@ def run_batch_lookup(results: List[ValidationResult], table_name: str, session_k
             if 'country_parent' in existing_data.columns:
                 valid_countries.update(existing_data['country_parent'].dropna().unique())
         
-        lookup_service = OptimizedServices.get_lookup_service()
+        lookup_service = InstitutionLookupService(valid_countries=list(valid_countries))
         
         progress_bar = st.progress(0)
         status_text = st.empty()
@@ -2101,7 +2101,7 @@ def execute_unified_bulk_insert(validation_results: List[ValidationResult], conf
         mapping_failed_count = 0
         
         if pending_mappings:
-            standardization_service = OptimizedServices.get_standardization_service()
+            standardization_service = StandardizationService()
             
             for row_index, mapping_info in pending_mappings.items():
                 try:
